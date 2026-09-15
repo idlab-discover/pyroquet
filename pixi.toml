@@ -6,7 +6,9 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact"] }
+check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata"] }
+test-metadata = "mojo run -D ASSERT=all -I src tests/test_metadata.mojo"
+test-metadata-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_metadata.mojo -o build/test-metadata && build/test-metadata"
 test-compact = "mojo run -D ASSERT=all -I src tests/test_compact.mojo"
 test-compact-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_compact.mojo -o build/test-compact && build/test-compact"
 package-compact = "mkdir -p build && mojo precompile src/compact_protocol -o build/compact_protocol.mojoc"
