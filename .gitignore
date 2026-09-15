@@ -1,0 +1,22 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# Build products and Python diagnostic caches
+/build/
+/docs/private/
+/profiling/
+/profiles/
+/benchmarks/
+*.pstats
+*.prof
+*.profraw
+*.profdata
+perf.data*
+callgrind.out*
+cachegrind.out*
+massif.out*
+*.mojoc
+*.mojopkg
+__pycache__/
+*.py[cod]
