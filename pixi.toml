@@ -6,7 +6,12 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-check = "mojo run -I src tests/smoke.mojo"
+check = { depends-on = ["smoke", "test-storage", "test-table"] }
+test-table = "mojo run -D ASSERT=all -I src tests/test_table.mojo"
+test-table-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_table.mojo -o build/test-table && build/test-table"
+smoke = "mojo run -I src tests/smoke.mojo"
+test-storage = "mojo run -D ASSERT=all -I src tests/test_storage.mojo"
+test-storage-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_storage.mojo -o build/test-storage && build/test-storage"
 build = "mkdir -p build && mojo build -I src tests/smoke.mojo -o build/smoke"
 package = "mkdir -p build && mojo precompile -I src src/pyroquet -o build/pyroquet.mojoc"
 format = "mojo format src tests examples"
