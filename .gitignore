@@ -4,6 +4,7 @@
 
 # Build products and Python diagnostic caches
 /build/
+/scratch/
 /docs/private/
 /profiling/
 /profiles/

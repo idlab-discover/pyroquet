@@ -1,0 +1,6 @@
+# Development-only independent Parquet producers/readers.
+fastparquet==2026.5.0
+pandas==2.3.3
+duckdb==1.5.5
+pyarrow==25.0.1
+thrift==0.24.0
