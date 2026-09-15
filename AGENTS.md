@@ -8,7 +8,7 @@
 
 ## Implementation and parity
 
-- Keep the library pure Mojo. Mojo dependencies are allowed; Python dependencies belong only in development tools, tests/oracles, benchmarks, and profiling, not library execution. Audit the dependency path used by the library; ordinary Mojo standard-library/runtime OS services are expected.
+- Keep the library in Mojo, with a current exception for compression/decompression: external codec libraries through FFI are allowed. Keep that exception confined to codecs; Parquet parsing, encoding, storage, and scheduling remain Mojo. Mojo dependencies are allowed. Python dependencies belong only in development tools, tests/oracles, benchmarks, and profiling, not library execution. Audit the dependency path used by the library; ordinary Mojo standard-library/runtime OS services are expected.
 - Check parity by running Fastparquet, DuckDB's relevant Parquet operations, and PyArrow's relevant Parquet operations against Pyroquet. Compare complete values, types, null locations, row order, and relevant metadata; distinguish NaN from null and compare floating bits when required.
 - Use the local `../parquet-format` specification to resolve disagreements. Record unsupported oracle behavior or invalid fixtures explicitly; preserve fixtures and validation rather than weakening checks to obtain agreement. A skipped oracle comparison is not a pass.
 
