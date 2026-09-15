@@ -6,7 +6,9 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages"] }
+check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-numojo"] }
+test-numojo = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo"
+test-numojo-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo -o build/test-numojo && build/test-numojo"
 test-pages = "mojo run -D ASSERT=all -I src tests/test_pages.mojo"
 test-pages-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_pages.mojo -o build/test-pages && build/test-pages"
 test-metadata = "mojo run -D ASSERT=all -I src tests/test_metadata.mojo"
@@ -20,7 +22,7 @@ smoke = "mojo run -I src tests/smoke.mojo"
 test-storage = "mojo run -D ASSERT=all -I src tests/test_storage.mojo"
 test-storage-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_storage.mojo -o build/test-storage && build/test-storage"
 build = "mkdir -p build && mojo build -I src tests/smoke.mojo -o build/smoke"
-package = "mkdir -p build && mojo precompile -I src src/pyroquet -o build/pyroquet.mojoc"
+package = "mkdir -p build && mojo precompile -I src -I ../NuMojo src/pyroquet -o build/pyroquet.mojoc"
 format = "mojo format src tests examples"
 
 [dependencies]
