@@ -4,7 +4,8 @@ A Mojo-native Parquet rewrite using **Mojo 1.0.0** and Pixi.
 Native storage now supports consuming freeze, shared immutable slices, and
 borrowed views. Validated schema trees and flat nullable UInt32 tables support
 independent column chunk boundaries. A parameterized Parquet loader decodes flat
-numeric columns directly into NuMojo arrays; writing remains unimplemented.
+numeric columns directly into NuMojo arrays. A bounded writer saves one numeric
+column per file, enabling numeric save/load round trips.
 
 An independent native `compact_protocol` module now handles Thrift Compact
 metadata encoding. Pyroquet now interprets schema trees and column chunks,
@@ -23,6 +24,8 @@ pixi run test-compact-release
 pixi run test-metadata-release
 pixi run test-pages-release
 pixi run test-numojo-release
+pixi run test-publication-release
+pixi run test-numeric-write-release
 pixi run build
 pixi run package
 pixi run package-compact
@@ -48,13 +51,14 @@ build/oracle-uv/bin/python tests/check_metadata.py
 build/oracle-uv/bin/python tests/check_pages.py
 build/oracle-uv/bin/python tests/check_numojo.py
 build/oracle-uv/bin/python tests/check_numeric.py
+build/oracle-uv/bin/python tests/check_numeric_write.py
 python tests/check_numojo_ownership.py
 ```
 
 The baseline snapshot reads the sibling `../pyroquet` checkout. Generated
 fixture artifacts stay under ignored `build/`; the corpus inventory goes to
 ignored `docs/private/`. The fixture checks use Fastparquet, DuckDB, and PyArrow
-to verify nullable UInt32 values, types, nulls, and row order across V1/V2 pages;
+to verify numeric values, types, nulls, and row order across V1/V2 reads and V1 writes;
 these packages are test dependencies only. The ownership check includes
 programs that must fail compilation. The inventory reads the sibling
 `../fastparquet` checkout.
@@ -140,3 +144,57 @@ intermediate full-column value array. Defaults cap values plus validity at 1 GiB
 CRC fields are not yet verified. Strict payload lengths reject the extra eight
 padding bytes emitted by fastparquet's V1 writer; those fixtures are documented
 rejection cases. The loader never returns partially decoded output.
+
+
+## Numeric saving and round trips
+
+`pyroquet.numojo_write.save_numeric[dtype](path, column, options)` borrows a
+`NumericColumn[dtype]` and creates a new single-column Parquet file. It supports
+all ten numeric dtypes above, required/nullable columns, empty/all-null inputs,
+and multiple pages/row groups. Output uses UNCOMPRESSED PLAIN V1 with matching
+modern/legacy integer annotations and null-count statistics. Numeric values,
+validity, row order, and floating bits are preserved; source layout and other
+metadata are not copied.
+
+```mojo
+from pyroquet.numojo_io import load_numeric
+from pyroquet.numojo_write import save_numeric, NumericWriteOptions
+
+var column = load_numeric[DType.int16]("input.parquet", "temperature")
+save_numeric[DType.int16]("output.parquet", column)
+```
+
+`NumericWriteOptions` defaults to OPTIONAL output because the column container
+retains actual validity, not the original schema's nullability marker. Choose
+`nullable=False` explicitly for REQUIRED output; nulls then cause an error.
+Manually constructed columns require contiguous one-dimensional NuMojo storage
+with unit stride. Saving borrows that storage without a full decoded-column copy.
+
+| Option | Default | Meaning |
+|---|---:|---|
+| `page_rows` | 65,536 | Maximum rows per page |
+| `row_group_rows` | 1,048,576 | Maximum rows per group |
+| `max_page_bytes` | 1 MiB | Conservative page-body allocation bound |
+| `max_metadata_bytes` | 64 MiB | Encoded footer limit |
+| `max_row_groups` | 100,000 | Retained group-record count limit |
+
+Page and group rows must be positive. The writer rejects options whose
+conservative page bound exceeds `max_page_bytes`, using the smaller of the
+configured page rows, group rows, and total rows. That bound includes physical
+value width, nullable levels, and up to five bytes for the hybrid-run header.
+Small header buffers and retained group records are accounted separately;
+footer memory grows with groups and column-name length. These are logical
+allocation limits, not an RSS ceiling. The encoded file is streamed page by page.
+
+The destination appears only after the complete staged file closes. Existing
+files, directories and symlinks are never replaced. Publication uses a private
+temporary directory beside the destination and an atomic hard link, so the
+filesystem must support hard links. Failure triggers best-effort staging cleanup;
+process termination can leave temporary files. There is no overwrite/append mode
+or crash-durability guarantee (file/directory fsync is not performed).
+
+```sh
+pixi run mojo run -I src -I ../NuMojo examples/roundtrip_numeric.mojo input.parquet output.parquet column_name
+```
+
+The example selects `DType.int16`; change that parameter to match the input file.

@@ -1,0 +1,309 @@
+"""Native numeric roundtrips and independent values, validity, bits and wire checks.
+
+Fastparquet's page reader exposes validity separately, avoiding pandas' conflation
+of float NaN and Parquet null. Its public pandas reader is checked as well.
+DuckDB NaN payload preservation is not required; all other float bits are checked.
+"""
+from pathlib import Path
+import json
+import math
+import struct
+import subprocess
+
+import duckdb
+import fastparquet
+from fastparquet import core, converted_types, encoding
+from fastparquet.cencoding import ThriftObject
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+
+from check_numeric import TYPES
+
+ROOT = Path(__file__).resolve().parents[1]
+OUT = ROOT / 'build/numeric-write-checks'
+BINARY = OUT / 'roundtrip'
+DUCK_TYPES = dict(zip(TYPES, ['TINYINT', 'UTINYINT', 'SMALLINT', 'USMALLINT',
+                            'INTEGER', 'UINTEGER', 'BIGINT', 'UBIGINT', 'FLOAT', 'DOUBLE']))
+
+
+def arrow_values(array, dtype):
+    """Use Arrow buffers directly so signaling NaNs are never Python floats."""
+    result = []
+    for chunk in array.chunks:
+        valid = chunk.is_valid().to_pylist()
+        width = chunk.type.bit_width // 8
+        raw = chunk.buffers()[1]
+        data = bytes(raw) if raw is not None else b''
+        for i, present in enumerate(valid):
+            begin = (i + chunk.offset) * width
+            result.append(None if not present else int.from_bytes(
+                data[begin:begin + width], 'little', signed=dtype.startswith('int')))
+    return result
+
+
+def probe(source, target, dtype, nullable=True, page_rows=17, row_group_rows=61,
+          max_page_bytes=1048576, max_metadata_bytes=67108864, max_row_groups=100000,
+          name='value'):
+    return subprocess.run([str(BINARY), dtype, str(source), str(target), name,
+                           str(int(nullable)), str(page_rows), str(row_group_rows),
+                           str(max_page_bytes), str(max_metadata_bytes), str(max_row_groups)],
+                          capture_output=True, text=True)
+
+
+def expected_plain(values, dtype):
+    width = max(4, getattr(pa, dtype)().bit_width // 8)
+    return b''.join((v % (1 << (width * 8))).to_bytes(width, 'little')
+                    for v in values if v is not None)
+
+
+def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
+                      page_rows=17, row_group_rows=61):
+    pf = fastparquet.ParquetFile(path)
+    se = pf.schema.schema_element(['value'])
+    assert se.repetition_type == int(nullable)
+    width = getattr(pa, dtype)().bit_width
+    physical = (4 if width == 32 else 5) if dtype.startswith('float') else (2 if width == 64 else 1)
+    assert se.type == physical
+    if not dtype.startswith('float'):
+        assert str(pf.dtypes['value']).lower() == dtype
+        if emitted:
+            assert se.converted_type == (15 if dtype.startswith('int') else 11) + [8, 16, 32, 64].index(width)
+            assert se.logicalType.INTEGER.bitWidth == width
+            assert se.logicalType.INTEGER.isSigned == dtype.startswith('int')
+    else:
+        assert str(pf.dtypes['value']) == dtype
+    raw = path.read_bytes()
+    offset = pages = 0
+    previous_end = 4
+    for group in pf.row_groups:
+        if emitted:
+            assert 0 < group.num_rows <= row_group_rows
+        assert len(group.columns) == 1
+        metadata = group.columns[0].meta_data
+        assert metadata.codec == 0 and metadata.type == physical
+        assert metadata.num_values == group.num_rows
+        if emitted:
+            assert set(metadata.encodings) <= {0, 3} and 0 in metadata.encodings
+            assert metadata.data_page_offset == previous_end
+            assert metadata.total_compressed_size == metadata.total_uncompressed_size
+            assert metadata.statistics.null_count == expected[offset:offset + group.num_rows].count(None)
+        stream = encoding.NumpyIO(raw)
+        stream.seek(metadata.data_page_offset)
+        group_start = stream.tell()
+        group_rows = 0
+        while group_rows < group.num_rows:
+            header = ThriftObject.from_buffer(stream, 'PageHeader')
+            assert header.type == 0
+            dh = header.data_page_header
+            assert dh.encoding == 0 and dh.definition_level_encoding == 3
+            if emitted:
+                assert 0 < dh.num_values <= page_rows
+            body_start = stream.tell()
+            body = raw[body_start:body_start + header.compressed_page_size]
+            defs, reps, vals = core.read_data_page(stream, pf.schema, header, metadata)
+            assert reps is None
+            valid = [True] * dh.num_values if defs is None else [int(v) == 1 for v in defs]
+            wanted = expected[offset:offset + dh.num_values]
+            assert valid == [v is not None for v in wanted], (path, offset)
+            vals = converted_types.convert(vals, se)
+            if dtype.startswith('float'):
+                got = vals.view('uint' + str(width)).tolist()
+            else:
+                got = vals.tolist()
+            assert got == [v for v in wanted if v is not None], (path, offset, got, wanted)
+            if emitted:
+                levels_size = 4 + int.from_bytes(body[:4], 'little') if nullable else 0
+                assert body[levels_size:] == expected_plain(wanted, dtype), (path, offset, 'PLAIN bytes/padding')
+                assert header.compressed_page_size == header.uncompressed_page_size == len(body)
+            group_rows += dh.num_values
+            offset += dh.num_values
+            pages += 1
+        assert group_rows == group.num_rows
+        if emitted:
+            assert stream.tell() - group_start == metadata.total_compressed_size
+            assert group.total_byte_size == metadata.total_uncompressed_size
+        previous_end = stream.tell()
+    assert offset == len(expected)
+    if emitted:
+        footer_size = int.from_bytes(raw[-8:-4], 'little')
+        assert previous_end == len(raw) - footer_size - 8
+        assert pf.fmd.num_rows == len(expected)
+    # Public Fastparquet conversion checks values/order/type. Page-level checks
+    # above certify null positions and float bits which pandas cannot represent.
+    series = pf.to_pandas()['value']
+    assert str(series.dtype).lower() == dtype
+    assert len(series) == len(expected)
+    for actual, wanted in zip(series, expected):
+        if wanted is None:
+            assert pd.isna(actual)
+        elif dtype.startswith('float'):
+            fmt = '<f' if width == 32 else '<d'
+            wanted_float = struct.unpack(fmt, wanted.to_bytes(width // 8, 'little'))[0]
+            if math.isnan(wanted_float):
+                assert math.isnan(actual)
+            else:
+                assert struct.pack(fmt, actual) == wanted.to_bytes(width // 8, 'little')
+        else:
+            assert int(actual) == wanted
+    return pages
+
+
+def compare(path, dtype, expected, db, **wire_options):
+    table = pq.read_table(path)
+    assert table.schema.field('value').type == getattr(pa, dtype)()
+    assert table.schema.field('value').nullable == wire_options['nullable']
+    assert arrow_values(table['value'], dtype) == expected, path
+    rows = db.execute('SELECT value FROM read_parquet(?)', [str(path)]).fetchall()
+    assert str(db.description[0][1]) == DUCK_TYPES[dtype]
+    assert len(rows) == len(expected)
+    width = getattr(pa, dtype)().bit_width
+    for (actual,), wanted in zip(rows, expected):
+        if wanted is None:
+            assert actual is None
+        elif dtype.startswith('float'):
+            fmt = '<f' if width == 32 else '<d'
+            wanted_float = struct.unpack(fmt, wanted.to_bytes(width // 8, 'little'))[0]
+            if math.isnan(wanted_float):
+                assert actual is not None and math.isnan(actual)
+            else:
+                assert struct.pack(fmt, actual) == wanted.to_bytes(width // 8, 'little')
+        else:
+            assert actual == wanted
+    return fastparquet_pages(path, dtype, expected, **wire_options)
+
+
+def main():
+    OUT.mkdir(parents=True, exist_ok=True)
+    subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
+                    '-I', 'src', '-I', '../NuMojo', 'tests/roundtrip_numeric.mojo',
+                    '-o', str(BINARY)], cwd=ROOT, check=True)
+    files = pages = rows = rejected = 0
+    db = duckdb.connect()
+    for dtype in TYPES:
+        typ = getattr(pa, dtype)()
+        width = typ.bit_width
+        if dtype.startswith('float'):
+            special = [0., -0., 1.5, -2.25, float('inf'), -float('inf'), float('nan'),
+                       float(np.finfo(dtype).max),
+                       struct.unpack('<f' if width == 32 else '<d', (1).to_bytes(width // 8, 'little'))[0]]
+        else:
+            signed = dtype.startswith('int')
+            special = [0, 1, -(2 ** (width - 1)) if signed else 2 ** (width - 1),
+                       2 ** (width - int(signed)) - 1]
+            if signed:
+                special.append(-1)
+        patterns = {'required': (special * 37, False),
+                    'nullable-valid': (special * 37, True),
+                    'mixed': ([None if i % 7 == 0 else special[i % len(special)] for i in range(277)], True),
+                    'runs': ([None] * 19 + special * 4 + [None] * 63 + special, True),
+                    'all-null': ([None] * 131, True),
+                    'empty': ([], True), 'empty-required': ([], False)}
+        for label, (values, nullable) in patterns.items():
+            source = OUT / f'{dtype}-{label}-source.parquet'
+            target = OUT / f'{dtype}-{label}-native.parquet'
+            schema = pa.schema([pa.field('value', typ, nullable=nullable)])
+            table = pa.Table.from_arrays([pa.array(values, type=typ)], schema=schema)
+            pq.write_table(table, source, compression='NONE', use_dictionary=False,
+                           data_page_version='1.0', row_group_size=101, write_statistics=False)
+            expected = arrow_values(table['value'], dtype)
+            compare(source, dtype, expected, db, nullable=nullable)
+            target.unlink(missing_ok=True)
+            result = probe(source, target, dtype, nullable=nullable)
+            assert result.returncode == 0, (target, result.stdout, result.stderr)
+            assert result.stdout.strip() == f'{len(values)} {values.count(None)}'
+            pages += compare(target, dtype, expected, db, emitted=True, nullable=nullable)
+            files += 1
+            rows += len(values)
+            before = target.read_bytes()
+            assert probe(source, target, dtype, nullable=nullable).returncode != 0
+            assert target.read_bytes() == before
+            rejected += 1
+        if dtype.startswith('float'):
+            bits = ([0x80000000, 0x7f800001, 0xffc12345] if width == 32 else
+                    [0x8000000000000000, 0x7ff0000000000001, 0xfff8123456789abc])
+            source = OUT / f'{dtype}-payload-source.parquet'
+            target = OUT / f'{dtype}-payload-native.parquet'
+            array = pa.Array.from_buffers(typ, len(bits), [None, pa.py_buffer(
+                b''.join(v.to_bytes(width // 8, 'little') for v in bits))])
+            table = pa.Table.from_arrays([array], schema=pa.schema([pa.field('value', typ, nullable=False)]))
+            pq.write_table(table, source, compression='NONE', use_dictionary=False, write_statistics=False)
+            compare(source, dtype, bits, db, nullable=False)
+            target.unlink(missing_ok=True)
+            result = probe(source, target, dtype, nullable=False, page_rows=1)
+            assert result.returncode == 0, (result.stdout, result.stderr)
+            pages += compare(target, dtype, bits, db, emitted=True, nullable=False, page_rows=1)
+            files += 1
+            rows += 3
+    source = OUT / 'int32-mixed-source.parquet'
+    for label, options in [
+        ('null-required', {'nullable': False}),
+        ('zero-page', {'page_rows': 0}), ('negative-page', {'page_rows': -1}),
+        ('zero-group', {'row_group_rows': 0}), ('negative-group', {'row_group_rows': -1}),
+        ('zero-page-bytes', {'max_page_bytes': 0}), ('small-page-bytes', {'max_page_bytes': 1}),
+        ('zero-metadata', {'max_metadata_bytes': 0}), ('small-metadata', {'max_metadata_bytes': 1}),
+        ('zero-groups', {'max_row_groups': 0}), ('too-many-groups', {'max_row_groups': 1}),
+    ]:
+        target = OUT / f'rejected-{label}.parquet'
+        target.unlink(missing_ok=True)
+        before = set(OUT.iterdir())
+        result = probe(source, target, 'int32', **options)
+        assert result.returncode != 0, label
+        assert not target.exists(), label
+        assert set(OUT.iterdir()) == before, (label, 'temporary file leak')
+        rejected += 1
+    # Exercise exact page/footer limits and deliberate output nullability changes.
+    for label, source_label, options in [
+        ('exact-page-bound', 'mixed', {'max_page_bytes': 80}),
+        ('group-smaller-than-page', 'mixed', {'row_group_rows': 3, 'max_page_bytes': 22}),
+        ('required-to-optional', 'required', {'nullable': True}),
+        ('optional-to-required', 'nullable-valid', {'nullable': False}),
+        ('zero-groups-empty', 'empty', {'max_row_groups': 0}),
+    ]:
+        source = OUT / f'int32-{source_label}-source.parquet'
+        target = OUT / f'{label}-native.parquet'
+        target.unlink(missing_ok=True)
+        expected = arrow_values(pq.read_table(source)['value'], 'int32')
+        outcome = probe(source, target, 'int32', **options)
+        assert outcome.returncode == 0, (label, outcome.stdout, outcome.stderr)
+        pages += compare(target, 'int32', expected, db, emitted=True,
+                         nullable=options.get('nullable', True),
+                         row_group_rows=options.get('row_group_rows', 61))
+        files += 1
+        rows += len(expected)
+    source = OUT / 'int32-mixed-source.parquet'
+    reference = OUT / 'int32-mixed-native.parquet'
+    metadata_size = int.from_bytes(reference.read_bytes()[-8:-4], 'little')
+    for budget, success in [(metadata_size, True), (metadata_size - 1, False)]:
+        target = OUT / f'footer-bound-{budget}.parquet'
+        target.unlink(missing_ok=True)
+        before = set(OUT.iterdir())
+        outcome = probe(source, target, 'int32', max_metadata_bytes=budget)
+        assert (outcome.returncode == 0) == success, (budget, outcome.stdout, outcome.stderr)
+        if success:
+            assert target.read_bytes() == reference.read_bytes()
+            pages += compare(target, 'int32', arrow_values(pq.read_table(source)['value'], 'int32'),
+                             db, emitted=True, nullable=True)
+            files += 1
+            rows += 277
+        else:
+            assert not target.exists() and set(OUT.iterdir()) == before
+            rejected += 1
+    target = OUT / 'one-byte-below-page-bound.parquet'
+    target.unlink(missing_ok=True)
+    before = set(OUT.iterdir())
+    assert probe(source, target, 'int32', max_page_bytes=79).returncode != 0
+    assert not target.exists() and set(OUT.iterdir()) == before
+    rejected += 1
+    db.close()
+    result = {'native_files': files, 'values_and_nulls': rows, 'native_pages': pages,
+              'rejections': rejected, 'oracles': ['PyArrow', 'DuckDB', 'Fastparquet'],
+              'float_bits': 'Native, Arrow buffers and Fastparquet page buffers preserve all tested bits; DuckDB and pandas check NaN semantics and all non-NaN bits.',
+              'skipped_oracle_comparisons': 0}
+    (OUT / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
+    print(json.dumps(result, indent=2))
+
+
+if __name__ == '__main__':
+    main()
