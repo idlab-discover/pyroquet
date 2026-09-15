@@ -9,6 +9,7 @@ from std.testing import (
 from std.memory import bitcast
 from std.sys import size_of
 from numojo.routines.creation import empty
+from numojo.core.ndarray import NDArray
 from pyroquet.numojo_io import (
     NumojoUInt32Column,
     NumericColumn,
@@ -272,6 +273,13 @@ def test_float_wire_bits() raises:
             bitcast[DType.uint64](_plain_value[DType.float64](bytes, 0)),
             pattern,
         )
+
+
+def test_numeric_container_rejects_strided_storage() raises:
+    # Scalar access and writer borrowing require a contiguous logical view.
+    with assert_raises():
+        var values = NDArray[DType.int16]([3], [2], 0)
+        _ = NumericColumn[DType.int16](values^, List[UInt8](), "x", 0)
 
 
 def main() raises:

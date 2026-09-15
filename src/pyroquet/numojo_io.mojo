@@ -30,6 +30,10 @@ struct NumericColumn[dtype: DType](Movable):
         _check_numeric[Self.dtype]()
         if values.ndim != 1 or null_count < 0 or null_count > values.size:
             raise Error("Invalid numeric column shape/count")
+        if values.strides[0] != 1:
+            raise Error(
+                "Numeric column requires contiguous unit-stride storage"
+            )
         if len(validity) == 0:
             if null_count != 0:
                 raise Error("Nulls require a validity bitmap")
