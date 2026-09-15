@@ -1,9 +1,10 @@
 # Pyroquet Next
 
 A Mojo-native Parquet rewrite using **Mojo 1.0.0** and Pixi.
-Native storage, nullable UInt32 tables, and an independent Compact Protocol
-codec are available. `pyroquet.format.inspect_metadata` reads validated schema
-and column-chunk metadata. Value decoding and writing remain unimplemented.
+Native storage, nullable UInt32 tables, and validated Parquet metadata are
+available. `pyroquet.format.inspect_column_pages` inspects bounded page headers
+and checks chunk/page totals through a shared streaming cursor. Payload decoding
+and writing remain unimplemented.
 
 ## Development
 
@@ -14,6 +15,7 @@ pixi run test-storage-release
 pixi run test-table-release
 pixi run test-compact-release
 pixi run test-metadata-release
+pixi run test-pages-release
 pixi run build
 pixi run package
 pixi run format
