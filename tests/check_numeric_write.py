@@ -9,6 +9,7 @@ import json
 import math
 import struct
 import subprocess
+import traceback
 
 import duckdb
 import fastparquet
@@ -24,6 +25,8 @@ from check_numeric import TYPES
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/numeric-write-checks'
 BINARY = OUT / 'roundtrip'
+PAGE_VERSION = 1
+LIMITATIONS = []
 DUCK_TYPES = dict(zip(TYPES, ['TINYINT', 'UTINYINT', 'SMALLINT', 'USMALLINT',
                             'INTEGER', 'UINTEGER', 'BIGINT', 'UBIGINT', 'FLOAT', 'DOUBLE']))
 
@@ -45,10 +48,11 @@ def arrow_values(array, dtype):
 
 def probe(source, target, dtype, nullable=True, page_rows=17, row_group_rows=61,
           max_page_bytes=1048576, max_metadata_bytes=67108864, max_row_groups=100000,
-          name='value'):
+          name='value', page_version=None):
     return subprocess.run([str(BINARY), dtype, str(source), str(target), name,
                            str(int(nullable)), str(page_rows), str(row_group_rows),
-                           str(max_page_bytes), str(max_metadata_bytes), str(max_row_groups)],
+                           str(max_page_bytes), str(max_metadata_bytes), str(max_row_groups),
+                           str(PAGE_VERSION if page_version is None else page_version)],
                           capture_output=True, text=True)
 
 
@@ -76,6 +80,7 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
         assert str(pf.dtypes['value']) == dtype
     raw = path.read_bytes()
     offset = pages = 0
+    interior_all_null_page = False
     previous_end = 4
     for group in pf.row_groups:
         if emitted:
@@ -95,16 +100,57 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
         group_rows = 0
         while group_rows < group.num_rows:
             header = ThriftObject.from_buffer(stream, 'PageHeader')
-            assert header.type == 0
-            dh = header.data_page_header
-            assert dh.encoding == 0 and dh.definition_level_encoding == 3
+            assert header.type == (3 if emitted and PAGE_VERSION == 2 else 0), (path, header.type, PAGE_VERSION)
+            dh = header.data_page_header_v2 if header.type == 3 else header.data_page_header
+            assert dh.encoding == 0
+            if header.type == 0:
+                assert dh.definition_level_encoding == 3
             if emitted:
                 assert 0 < dh.num_values <= page_rows
             body_start = stream.tell()
             body = raw[body_start:body_start + header.compressed_page_size]
-            defs, reps, vals = core.read_data_page(stream, pf.schema, header, metadata)
-            assert reps is None
-            valid = [True] * dh.num_values if defs is None else [int(v) == 1 for v in defs]
+            if header.type == 3:
+                assert dh.num_rows == dh.num_values
+                assert dh.num_nulls == expected[offset:offset + dh.num_values].count(None)
+                assert dh.repetition_levels_byte_length == 0
+                assert dh.is_compressed is False
+                levels_size = dh.definition_levels_byte_length
+                assert 0 <= levels_size <= len(body)
+                assert (levels_size > 0) == nullable
+                if nullable:
+                    defs = np.empty(dh.num_values, dtype='uint8')
+                    core.encoding.read_rle_bit_packed_hybrid(
+                        encoding.NumpyIO(body[:levels_size]), 1, levels_size,
+                        encoding.NumpyIO(defs), itemsize=1)
+                    valid = (defs == 1).tolist()
+                else:
+                    valid = [True] * dh.num_values
+                # Run the real Fastparquet V2 decoder on a page-sized target.
+                # This avoids its public reader's whole-row-group mask bug;
+                # public reading is still attempted and reported separately.
+                if dtype.startswith('int') or dtype.startswith('uint'):
+                    assign = pd.array(np.zeros(dh.num_values, dtype=dtype),
+                                      dtype=dtype.replace('int', 'Int').replace('uInt', 'UInt'))
+                else:
+                    assign = np.zeros(dh.num_values, dtype=dtype)
+                # Bound the input too: Fastparquet NumpyIO.read(0) otherwise
+                # consumes subsequent pages when this page has no values.
+                page_stream = encoding.NumpyIO(body)
+                core.read_data_page_v2(page_stream, pf.schema, se, dh, metadata,
+                                       None, assign, 0, False, 0, header)
+                assert page_stream.tell() == len(body)
+                stream.seek(body_start + len(body))
+                interior_all_null_page |= (dh.num_nulls == dh.num_values
+                                           and group_rows + dh.num_values < group.num_rows)
+                if hasattr(assign, '_mask'):
+                    assert (~assign._mask).tolist() == valid
+                    vals = assign._data[np.array(valid)]
+                else:
+                    vals = assign[np.array(valid)]
+            else:
+                defs, reps, vals = core.read_data_page(stream, pf.schema, header, metadata)
+                assert reps is None
+                valid = [True] * dh.num_values if defs is None else [int(v) == 1 for v in defs]
             wanted = expected[offset:offset + dh.num_values]
             assert valid == [v is not None for v in wanted], (path, offset)
             vals = converted_types.convert(vals, se)
@@ -114,7 +160,8 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
                 got = vals.tolist()
             assert got == [v for v in wanted if v is not None], (path, offset, got, wanted)
             if emitted:
-                levels_size = 4 + int.from_bytes(body[:4], 'little') if nullable else 0
+                levels_size = (dh.definition_levels_byte_length if header.type == 3 else
+                               4 + int.from_bytes(body[:4], 'little') if nullable else 0)
                 assert body[levels_size:] == expected_plain(wanted, dtype), (path, offset, 'PLAIN bytes/padding')
                 assert header.compressed_page_size == header.uncompressed_page_size == len(body)
             group_rows += dh.num_values
@@ -132,21 +179,39 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
         assert pf.fmd.num_rows == len(expected)
     # Public Fastparquet conversion checks values/order/type. Page-level checks
     # above certify null positions and float bits which pandas cannot represent.
-    series = pf.to_pandas()['value']
-    assert str(series.dtype).lower() == dtype
-    assert len(series) == len(expected)
-    for actual, wanted in zip(series, expected):
-        if wanted is None:
-            assert pd.isna(actual)
-        elif dtype.startswith('float'):
-            fmt = '<f' if width == 32 else '<d'
-            wanted_float = struct.unpack(fmt, wanted.to_bytes(width // 8, 'little'))[0]
-            if math.isnan(wanted_float):
-                assert math.isnan(actual)
+    try:
+        series = pf.to_pandas()['value']
+        assert str(series.dtype).lower() == dtype
+        assert len(series) == len(expected)
+        for actual, wanted in zip(series, expected):
+            if wanted is None:
+                assert pd.isna(actual)
+            elif dtype.startswith('float'):
+                fmt = '<f' if width == 32 else '<d'
+                wanted_float = struct.unpack(fmt, wanted.to_bytes(width // 8, 'little'))[0]
+                if math.isnan(wanted_float):
+                    assert math.isnan(actual)
+                else:
+                    assert struct.pack(fmt, actual) == wanted.to_bytes(width // 8, 'little')
             else:
-                assert struct.pack(fmt, actual) == wanted.to_bytes(width // 8, 'little')
-        else:
-            assert int(actual) == wanted
+                assert int(actual) == wanted
+    except (IndexError, TypeError) as error:
+        # Both failures are independently reproduced with PyArrow V2 files;
+        # neither counts as a successful public-reader comparison.
+        mask_bug = (isinstance(error, IndexError)
+                    and 'boolean index did not match indexed array' in str(error)
+                    and not dtype.startswith('float') and any(v is None for v in expected)
+                    and any(g.num_rows > page_rows for g in pf.row_groups))
+        cursor_bug = (isinstance(error, TypeError) and str(error) == 'an integer is required'
+                      and dtype.startswith('float') and interior_all_null_page
+                      and '_read_page' in traceback.format_exc())
+        if not (emitted and PAGE_VERSION == 2 and nullable and (mask_bug or cursor_bug)):
+            raise
+        LIMITATIONS.append({'file': str(path), 'oracle': 'Fastparquet public to_pandas',
+                            'version': fastparquet.__version__,
+                            'error': type(error).__name__ + ': ' + str(error),
+                            'traceback': traceback.format_exc(),
+                            'status': 'unsupported; page-level comparison passed'})
     return pages
 
 
@@ -174,11 +239,8 @@ def compare(path, dtype, expected, db, **wire_options):
     return fastparquet_pages(path, dtype, expected, **wire_options)
 
 
-def main():
+def run_version():
     OUT.mkdir(parents=True, exist_ok=True)
-    subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
-                    '-I', 'src', '-I', '../NuMojo', 'tests/roundtrip_numeric.mojo',
-                    '-o', str(BINARY)], cwd=ROOT, check=True)
     files = pages = rows = rejected = 0
     db = duckdb.connect()
     for dtype in TYPES:
@@ -239,6 +301,8 @@ def main():
     source = OUT / 'int32-mixed-source.parquet'
     for label, options in [
         ('null-required', {'nullable': False}),
+        ('version-zero', {'page_version': 0}), ('version-three', {'page_version': 3}),
+        ('version-negative', {'page_version': -1}),
         ('zero-page', {'page_rows': 0}), ('negative-page', {'page_rows': -1}),
         ('zero-group', {'row_group_rows': 0}), ('negative-group', {'row_group_rows': -1}),
         ('zero-page-bytes', {'max_page_bytes': 0}), ('small-page-bytes', {'max_page_bytes': 1}),
@@ -255,8 +319,8 @@ def main():
         rejected += 1
     # Exercise exact page/footer limits and deliberate output nullability changes.
     for label, source_label, options in [
-        ('exact-page-bound', 'mixed', {'max_page_bytes': 80}),
-        ('group-smaller-than-page', 'mixed', {'row_group_rows': 3, 'max_page_bytes': 22}),
+        ('exact-page-bound', 'mixed', {'max_page_bytes': 80 if PAGE_VERSION == 1 else 76}),
+        ('group-smaller-than-page', 'mixed', {'row_group_rows': 3, 'max_page_bytes': 22 if PAGE_VERSION == 1 else 18}),
         ('required-to-optional', 'required', {'nullable': True}),
         ('optional-to-required', 'nullable-valid', {'nullable': False}),
         ('zero-groups-empty', 'empty', {'max_row_groups': 0}),
@@ -293,16 +357,32 @@ def main():
     target = OUT / 'one-byte-below-page-bound.parquet'
     target.unlink(missing_ok=True)
     before = set(OUT.iterdir())
-    assert probe(source, target, 'int32', max_page_bytes=79).returncode != 0
+    assert probe(source, target, 'int32', max_page_bytes=79 if PAGE_VERSION == 1 else 75).returncode != 0
     assert not target.exists() and set(OUT.iterdir()) == before
     rejected += 1
     db.close()
     result = {'native_files': files, 'values_and_nulls': rows, 'native_pages': pages,
               'rejections': rejected, 'oracles': ['PyArrow', 'DuckDB', 'Fastparquet'],
               'float_bits': 'Native, Arrow buffers and Fastparquet page buffers preserve all tested bits; DuckDB and pandas check NaN semantics and all non-NaN bits.',
-              'skipped_oracle_comparisons': 0}
+              'page_version': PAGE_VERSION,
+              'unsupported_oracle_comparisons': len(LIMITATIONS),
+              'oracle_limitations': LIMITATIONS.copy()}
     (OUT / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
-    print(json.dumps(result, indent=2))
+    print(json.dumps({k: v for k, v in result.items() if k != 'oracle_limitations'}, indent=2))
+
+
+def main():
+    global OUT, PAGE_VERSION
+    base = OUT
+    base.mkdir(parents=True, exist_ok=True)
+    subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
+                    '-I', 'src', '-I', '../NuMojo', 'tests/roundtrip_numeric.mojo',
+                    '-o', str(BINARY)], cwd=ROOT, check=True)
+    for version in (1, 2):
+        PAGE_VERSION = version
+        OUT = base / f'v{version}'
+        LIMITATIONS.clear()
+        run_version()
 
 
 if __name__ == '__main__':

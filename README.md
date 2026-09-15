@@ -58,7 +58,7 @@ python tests/check_numojo_ownership.py
 The baseline snapshot reads the sibling `../pyroquet` checkout. Generated
 fixture artifacts stay under ignored `build/`; the corpus inventory goes to
 ignored `docs/private/`. The fixture checks use Fastparquet, DuckDB, and PyArrow
-to verify numeric values, types, nulls, and row order across V1/V2 reads and V1 writes;
+to verify numeric values, types, nulls, and row order across V1/V2 reads and writes;
 these packages are test dependencies only. The ownership check includes
 programs that must fail compilation. The inventory reads the sibling
 `../fastparquet` checkout.
@@ -151,7 +151,7 @@ rejection cases. The loader never returns partially decoded output.
 `pyroquet.numojo_write.save_numeric[dtype](path, column, options)` borrows a
 `NumericColumn[dtype]` and creates a new single-column Parquet file. It supports
 all ten numeric dtypes above, required/nullable columns, empty/all-null inputs,
-and multiple pages/row groups. Output uses UNCOMPRESSED PLAIN V1 with matching
+and multiple pages/row groups. Output uses UNCOMPRESSED PLAIN V1 or V2 with matching
 modern/legacy integer annotations and null-count statistics. Numeric values,
 validity, row order, and floating bits are preserved; source layout and other
 metadata are not copied.
@@ -161,7 +161,9 @@ from pyroquet.numojo_io import load_numeric
 from pyroquet.numojo_write import save_numeric, NumericWriteOptions
 
 var column = load_numeric[DType.int16]("input.parquet", "temperature")
-save_numeric[DType.int16]("output.parquet", column)
+save_numeric[DType.int16](
+    "output.parquet", column, NumericWriteOptions(page_version=2)
+)
 ```
 
 `NumericWriteOptions` defaults to OPTIONAL output because the column container
@@ -172,16 +174,22 @@ with unit stride. Saving borrows that storage without a full decoded-column copy
 
 | Option | Default | Meaning |
 |---|---:|---|
+| `page_version` | 1 | Data page format: 1 or 2; values remain PLAIN |
 | `page_rows` | 65,536 | Maximum rows per page |
 | `row_group_rows` | 1,048,576 | Maximum rows per group |
 | `max_page_bytes` | 1 MiB | Conservative page-body allocation bound |
 | `max_metadata_bytes` | 64 MiB | Encoded footer limit |
 | `max_row_groups` | 100,000 | Retained group-record count limit |
 
+V1 remains the default. V2 stores level lengths and page row/null counts in its
+header, omits the V1 four-byte level prefix, and explicitly sets
+`is_compressed=False`. Both formats use the same numeric array and validity.
+
 Page and group rows must be positive. The writer rejects options whose
 conservative page bound exceeds `max_page_bytes`, using the smaller of the
 configured page rows, group rows, and total rows. That bound includes physical
-value width, nullable levels, and up to five bytes for the hybrid-run header.
+value width, nullable levels, up to five bytes for the hybrid-run header, and
+the four-byte level prefix for nullable V1 pages only.
 Small header buffers and retained group records are accounted separately;
 footer memory grows with groups and column-name length. These are logical
 allocation limits, not an RSS ceiling. The encoded file is streamed page by page.
@@ -198,3 +206,11 @@ pixi run mojo run -I src -I ../NuMojo examples/roundtrip_numeric.mojo input.parq
 ```
 
 The example selects `DType.int16`; change that parameter to match the input file.
+
+
+The V2 interoperability harness records known Fastparquet 2026.5.0 public-reader
+limitations for nullable integer masks and all-null pages followed by another
+page. It still verifies each bounded page through Fastparquet and checks complete
+files with Pyroquet, PyArrow, and DuckDB. Exact affected cases are recorded in
+`build/numeric-write-checks/v2/results.json`; failed public comparisons are not
+counted as passes.

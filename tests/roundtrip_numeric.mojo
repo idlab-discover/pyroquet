@@ -16,6 +16,7 @@ def roundtrip[dtype: DType]() raises:
         max_page_bytes=Int(args[8]),
         max_metadata_bytes=Int(args[9]),
         max_row_groups=Int(args[10]),
+        page_version=Int(args[11]),
     )
     save_numeric[dtype](String(args[3]), column, options)
     var result = load_numeric[dtype](String(args[3]), String(args[4]))
@@ -43,10 +44,10 @@ def roundtrip[dtype: DType]() raises:
 
 def main() raises:
     var args = argv()
-    if len(args) != 11:
+    if len(args) != 12:
         raise Error(
             "Expected dtype input output column nullable page_rows"
-            " row_group_rows max_page_bytes max_metadata_bytes max_row_groups"
+            " row_group_rows max_page_bytes max_metadata_bytes max_row_groups page_version"
         )
     comptime types = (
         DType.int8,

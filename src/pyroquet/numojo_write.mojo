@@ -1,4 +1,4 @@
-"""Write a borrowed numeric column as bounded, uncompressed PLAIN V1 pages."""
+"""Write a borrowed numeric column as bounded, uncompressed PLAIN V1/V2 pages."""
 from std.memory import bitcast
 from std.sys import size_of
 from .io import NewFile
@@ -7,6 +7,7 @@ from .format.numeric_writer import _WrittenGroup, _plain_header, _numeric_footer
 
 
 struct NumericWriteOptions(ImplicitlyCopyable):
+    var page_version: Int
     var nullable: Bool
     var page_rows: Int
     var row_group_rows: Int
@@ -22,7 +23,9 @@ struct NumericWriteOptions(ImplicitlyCopyable):
         max_page_bytes: Int = 1048576,
         max_metadata_bytes: Int = 67108864,
         max_row_groups: Int = 100000,
+        page_version: Int = 1,
     ):
+        self.page_version = page_version
         self.nullable = nullable
         self.page_rows = page_rows
         self.row_group_rows = row_group_rows
@@ -32,7 +35,8 @@ struct NumericWriteOptions(ImplicitlyCopyable):
 
     def validate(self, physical_bytes: Int, rows: Int, nulls: Int) raises:
         if (
-            self.page_rows < 1
+            (self.page_version != 1 and self.page_version != 2)
+            or self.page_rows < 1
             or self.page_rows > 2147483647
             or self.row_group_rows < 1
             or self.max_page_bytes < 1
@@ -53,8 +57,9 @@ struct NumericWriteOptions(ImplicitlyCopyable):
         var page_count = min(self.page_rows, min(self.row_group_rows, rows))
         var bound = page_count * physical_bytes
         if self.nullable and page_count != 0:
-            # V1 length prefix, up to five hybrid-header bytes, packed bits.
-            bound += 9 + page_count // 8 + Int(page_count % 8 != 0)
+            # V1 alone has a four-byte prefix; both have a hybrid header.
+            bound += (4 if self.page_version == 1 else 0) + 5
+            bound += page_count // 8 + Int(page_count % 8 != 0)
         if bound > self.max_page_bytes:
             raise Error("Configured page rows exceed page byte limit")
 
@@ -87,6 +92,7 @@ def _numeric_page[
     count: Int,
     nullable: Bool,
     mut nulls: Int,
+    page_version: Int = 1,
 ) raises -> List[UInt8]:
     if (
         start < 0
@@ -106,11 +112,12 @@ def _numeric_page[
         header_bytes += 1
         remaining >>= 7
     if nullable:
-        level_bytes = 4 + header_bytes + groups
+        level_bytes = (4 if page_version == 1 else 0) + header_bytes + groups
     bytes.reserve(level_bytes + count * width)
     var validity = column.validity()
     if nullable:
-        _append_u32(bytes, UInt32(header_bytes + groups))
+        if page_version == 1:
+            _append_u32(bytes, UInt32(header_bytes + groups))
         while header >= 128:
             bytes.append(UInt8(header & 127) | 128)
             header >>= 7
@@ -177,10 +184,25 @@ def save_numeric[
         var nulls = 0
         while written < count:
             var page_rows = min(options.page_rows, count - written)
+            var page_nulls = 0
             var bytes = _numeric_page[dtype](
-                column, start + written, page_rows, options.nullable, nulls
+                column,
+                start + written,
+                page_rows,
+                options.nullable,
+                page_nulls,
+                options.page_version,
             )
-            var header = _plain_header(page_rows, len(bytes))
+            nulls += page_nulls
+            # Present values occupy physical-width slots in both page formats.
+            var level_bytes = len(bytes) - (page_rows - page_nulls) * width
+            var header = _plain_header(
+                page_rows,
+                len(bytes),
+                options.page_version,
+                page_nulls,
+                level_bytes,
+            )
             var size = Int64(len(header)) + Int64(len(bytes))
             if size > Int64.MAX - offset:
                 raise Error("Output file offset overflow")

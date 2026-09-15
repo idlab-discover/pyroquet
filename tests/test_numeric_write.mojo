@@ -112,5 +112,61 @@ def test_required_rejects_nulls_and_empty_preserves_policy() raises:
         assert_equal(metadata.schema[1].repetition, 0)
 
 
+def test_v2_headers_levels_and_page_null_counts() raises:
+    with TemporaryDirectory() as directory:
+        var values = empty[DType.int8]([9])
+        for i in range(9):
+            values.unsafe_ptr()[unsafe_offset=i] = Int8(i - 4)
+        var column = NumericColumn[DType.int8](
+            values^, [UInt8(248), UInt8(1)], "x", 3
+        )
+        var path = directory + "/v2.parquet"
+        save_numeric[DType.int8](
+            path,
+            column,
+            NumericWriteOptions(page_rows=3, row_group_rows=6, page_version=2),
+        )
+        var pages = inspect_column_pages(path, 0, 0)
+        assert_equal(len(pages), 2)
+        for i in range(2):
+            assert_equal(pages[i].header.page_type, 3)
+            assert_equal(pages[i].header.encoding, 0)
+            assert_equal(pages[i].header.num_values, 3)
+            assert_equal(pages[i].header.num_rows, 3)
+            assert_equal(pages[i].header.num_nulls, 3 if i == 0 else 0)
+            assert_equal(pages[i].header.definition_levels_byte_length, 2)
+            assert_equal(pages[i].header.repetition_levels_byte_length, 0)
+            assert_equal(pages[i].header.is_compressed, False)
+        var file = open(path, "r")
+        _ = file.seek(Int(pages[0].payload_offset))
+        assert_equal(file.read_bytes(2), [UInt8(3), UInt8(0)])
+        assert_equal(pages[0].header.compressed_page_size, 2)
+        var loaded = load_numeric[DType.int8](path, "x")
+        assert_equal(loaded.null_count(), 3)
+        assert_equal(loaded.value(8).value(), Int8(4))
+        var required_values = empty[DType.int8]([1])
+        required_values.unsafe_ptr()[unsafe_offset=0] = -128
+        var required = NumericColumn[DType.int8](
+            required_values^, List[UInt8](), "x", 0
+        )
+        save_numeric[DType.int8](
+            directory + "/required.parquet",
+            required,
+            NumericWriteOptions(nullable=False, page_version=2),
+        )
+        var required_pages = inspect_column_pages(
+            directory + "/required.parquet", 0, 0
+        )
+        assert_equal(required_pages[0].header.definition_levels_byte_length, 0)
+        assert_equal(required_pages[0].header.compressed_page_size, 4)
+        with assert_raises():
+            save_numeric[DType.int8](
+                directory + "/invalid.parquet",
+                required,
+                NumericWriteOptions(page_version=3),
+            )
+        assert_equal(len(listdir(directory)), 2)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

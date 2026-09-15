@@ -25,18 +25,32 @@ def _string(mut writer: CompactWriter, field: Int, value: String) raises:
     writer.write_string(value)
 
 
-def _plain_header(rows: Int, body_size: Int) raises -> List[UInt8]:
+def _plain_header(
+    rows: Int,
+    body_size: Int,
+    page_version: Int = 1,
+    nulls: Int = 0,
+    definition_bytes: Int = 0,
+) raises -> List[UInt8]:
     var writer = CompactWriter(CompactLimits(max_bytes=128))
     writer.begin_struct()
-    _i32(writer, 1, 0)  # DATA_PAGE
+    _i32(writer, 1, 0 if page_version == 1 else 3)  # DATA_PAGE / DATA_PAGE_V2
     _i32(writer, 2, body_size)
     _i32(writer, 3, body_size)
-    writer.write_field(5, CompactType.STRUCT)
+    writer.write_field(5 if page_version == 1 else 8, CompactType.STRUCT)
     writer.begin_struct()
     _i32(writer, 1, rows)
-    _i32(writer, 2, 0)  # PLAIN
-    _i32(writer, 3, 3)  # RLE definition levels
-    _i32(writer, 4, 3)  # RLE repetition levels (absent for flat fields)
+    if page_version == 1:
+        _i32(writer, 2, 0)  # PLAIN
+        _i32(writer, 3, 3)  # RLE definition levels
+        _i32(writer, 4, 3)  # RLE repetition levels (absent for flat fields)
+    else:
+        _i32(writer, 2, nulls)
+        _i32(writer, 3, rows)  # Flat values are whole rows
+        _i32(writer, 4, 0)  # PLAIN
+        _i32(writer, 5, definition_bytes)
+        _i32(writer, 6, 0)  # No repetition-level stream
+        writer.write_bool_field(7, False)  # Values are explicitly uncompressed
     writer.end_struct()
     writer.end_struct()
     return writer^.finish()
