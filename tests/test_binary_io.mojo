@@ -96,6 +96,10 @@ def test_complete_io_matrix() raises:
                                     loaded.column(0).boolean().value(i),
                                     table.column(0).boolean().value(i),
                                 )
+                                assert_equal(
+                                    loaded.column(1).binary().is_valid(i),
+                                    table.column(1).binary().is_valid(i),
+                                )
                                 if table.column(1).binary().is_valid(i):
                                     var expected = (
                                         table.column(1).binary().value(i)

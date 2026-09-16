@@ -44,6 +44,54 @@ def native(path, expected):
     assert next(lines, None) is None
 
 
+def known_fastparquet_error(path, exc):
+    """Recognize only failures reproduced in the retained deterministic corpus."""
+    arrow_v2 = {
+        f'arrow-2.0-{codec}-{dictionary}.parquet'
+        for codec in ('NONE', 'SNAPPY') for dictionary in (False, True)
+    }
+    if path.name in arrow_v2:
+        return type(exc) is ValueError and str(exc) == (
+            'NumPy boolean array indexing assignment cannot assign 23 input '
+            'values to the 18 output values where the mask is true'
+        )
+    sizes = {
+        **{f'native-v2-codec{codec}.parquet': (7, 19) for codec in (0, 1)},
+        **{f'wire-bool-rle-v2-c{codec}.parquet': (9, 12) for codec in (0, 1)},
+    }
+    if path.name in sizes:
+        values, mask = sizes[path.name]
+        return type(exc) is IndexError and str(exc) == (
+            'boolean index did not match indexed array along axis 0; '
+            f'size of axis is {values} but size of corresponding boolean '
+            f'axis is {mask}'
+        )
+    return False
+
+
+def known_fastparquet_values(path, expected, actual):
+    """Pin complete known value mismatches; new null/value differences must fail."""
+    if path.name in {f'wire-bool-rle-v1-c{codec}.parquet' for codec in (0, 1)}:
+        return expected == {'flag': [
+            True, None, False, True, None, True, False, True, True,
+            False, True, None,
+        ]} and actual == {'flag': [
+            False, None, True, False, None, True, True, False, True,
+            False, True, None,
+        ]}
+    fixed_files = {
+        f'wire-fixed-mixed-v{version}-c{codec}.parquet'
+        for version in (1, 2) for codec in (0, 1)
+    }
+    if path.name in fixed_files and set(expected) == {'fixed'}:
+        stripped = {'fixed': [
+            None if value is None else value.rstrip(b'\0')
+            for value in expected['fixed']
+        ]}
+        return actual == stripped
+    return False
+
+
 def readers(path, expected, fixed=True):
     arrow = pq.read_table(path)
     assert arrow.to_pydict() == expected, path
@@ -61,15 +109,16 @@ def readers(path, expected, fixed=True):
     try:
         frame = fastparquet.ParquetFile(path).to_pandas()
         actual = {name: [None if pd.isna(v) else v for v in frame[name].tolist()] for name in expected}
-        assert actual == expected, (path, actual)
-    except Exception as exc:
-        # Only reproduced V2 nullable/Boolean-RLE/fixed-NUL limitations are accepted.
-        allowed = ('2.0' in path.name or 'v2' in path.name or
-                   'bool-rle' in path.name or 'wire-fixed-' in path.name)
-        assert allowed, (path, exc)
+    except (ValueError, IndexError) as exc:
+        if not known_fastparquet_error(path, exc):
+            raise
         RESULTS.append([path.name, 'fastparquet-read', 'defect', repr(exc)[:400]])
     else:
-        RESULTS.append([path.name, 'fastparquet-read', 'pass'])
+        if actual == expected:
+            RESULTS.append([path.name, 'fastparquet-read', 'pass'])
+        else:
+            assert known_fastparquet_values(path, expected, actual), (path, actual)
+            RESULTS.append([path.name, 'fastparquet-read', 'defect', repr(actual)[:400]])
 
 
 def assert_plain_wire(path, expected):
