@@ -7,11 +7,13 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+test-hybrid = "mojo run -D ASSERT=all -I src tests/test_hybrid.mojo"
+test-hybrid-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_hybrid.mojo -o build/test-hybrid && build/test-hybrid"
 test-numeric-write = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo"
 test-numeric-write-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo -o build/test-numeric-write && build/test-numeric-write"
 test-publication = "mojo run -D ASSERT=all -I src tests/test_publication.mojo"
 test-publication-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_publication.mojo -o build/test-publication && build/test-publication"
-check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-numojo", "test-publication", "test-numeric-write"] }
+check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-hybrid", "test-numojo", "test-publication", "test-numeric-write"] }
 test-numojo = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo"
 test-numojo-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo -o build/test-numojo && build/test-numojo"
 test-pages = "mojo run -D ASSERT=all -I src tests/test_pages.mojo"
