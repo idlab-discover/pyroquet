@@ -1,4 +1,4 @@
-"""Direct-to-NuMojo flat numeric reading (uncompressed/Snappy PLAIN V1/V2).
+"""Direct-to-NuMojo flat numeric reading (uncompressed/Snappy PLAIN and dictionary V1/V2).
 
 NuMojo owns the sole decoded value allocation. Parquet contributes a packed
 validity bitmap; null slots are initialized to zero, not a sentinel. Numeric
@@ -12,6 +12,7 @@ from compact_protocol import CompactLimits
 from .format.footer import _read_footer_bytes_from_file
 from .format.metadata import SchemaElement, parse_metadata, validate_file_ranges
 from .format.pages import PageLimits, PageHeader, _ColumnPages
+from .format.hybrid import _HybridDecoder
 from mojo_snappy import decode_snappy
 
 
@@ -233,7 +234,7 @@ def _definition_levels(
     return present
 
 
-def _decode_plain_page[
+def _decode_numeric_page[
     dtype: DType
 ](
     bytes: List[UInt8],
@@ -242,9 +243,14 @@ def _decode_plain_page[
     mut values: NDArray[dtype],
     mut bitmap: List[UInt8],
     output: Int,
+    dictionary: List[Scalar[dtype]],
+    has_dictionary: Bool,
 ) raises -> Int:
-    if h.encoding != 0:
-        raise Error("Only PLAIN numeric encoding is supported")
+    var indexed = h.encoding == 2 or h.encoding == 8
+    if h.encoding != 0 and not indexed:
+        raise Error("Unsupported numeric data encoding")
+    if indexed and not has_dictionary:
+        raise Error("Dictionary data page has no dictionary")
     if (
         h.num_values < 0
         or output < 0
@@ -281,13 +287,20 @@ def _decode_plain_page[
         present = _definition_levels(
             bytes, level_start, level_end, h.num_values, bitmap, output
         )
-    if len(bytes) - data_start != present * (
+    if not indexed and len(bytes) - data_start != present * (
         8 if size_of[Scalar[dtype]]() == 8 else 4
     ):
         raise Error("PLAIN byte length disagrees with non-null value count")
     var nulls = h.num_values - present
     if h.page_type == 3 and h.num_nulls != nulls:
         raise Error("V2 null count disagrees with definition levels")
+    var ids = _HybridDecoder(0, 0, 0, 0)
+    if indexed:
+        if data_start >= len(bytes):
+            raise Error("Missing dictionary ID bit width")
+        ids = _HybridDecoder(
+            data_start + 1, len(bytes), Int(bytes[data_start]), present
+        )
     var pointer = values.unsafe_ptr()
     var pos = data_start
     for i in range(h.num_values):
@@ -299,10 +312,48 @@ def _decode_plain_page[
             )
         var value = Scalar[dtype](0)
         if valid:
-            value = _plain_value[dtype](bytes, pos)
-            pos += 8 if size_of[Scalar[dtype]]() == 8 else 4
+            if indexed:
+                var index = ids.next(bytes)
+                if UInt64(index) >= UInt64(len(dictionary)):
+                    raise Error("Dictionary ID outside dictionary")
+                value = dictionary[Int(index)]
+            else:
+                value = _plain_value[dtype](bytes, pos)
+                pos += 8 if size_of[Scalar[dtype]]() == 8 else 4
         pointer[unsafe_offset=output + i] = value
+    if indexed:
+        ids.finish()
     return nulls
+
+
+def _decode_plain_page[
+    dtype: DType
+](
+    bytes: List[UInt8],
+    h: PageHeader,
+    nullable: Bool,
+    mut values: NDArray[dtype],
+    mut bitmap: List[UInt8],
+    output: Int,
+) raises -> Int:
+    """PLAIN-only internal compatibility seam used by native tests."""
+    if h.encoding != 0:
+        raise Error("Expected PLAIN numeric encoding")
+    var dictionary = List[Scalar[dtype]]()
+    return _decode_numeric_page[dtype](
+        bytes, h, nullable, values, bitmap, output, dictionary, False
+    )
+
+
+def _check_dictionary_header[dtype: DType](h: PageHeader, limit: Int) raises:
+    # Validate cardinality against physical bytes before decompression/allocation.
+    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    if h.encoding != 0 and h.encoding != 2:
+        raise Error("Dictionary entries require PLAIN encoding")
+    if h.num_values < 0 or h.num_values > limit // width:
+        raise Error("Dictionary cardinality exceeds page budget")
+    if h.uncompressed_page_size != h.num_values * width:
+        raise Error("Dictionary byte length disagrees with entry count")
 
 
 def _numeric_page_body(
@@ -317,7 +368,7 @@ def _numeric_page_body(
         if len(bytes) != h.uncompressed_page_size:
             raise Error("Uncompressed page body sizes disagree")
         return bytes^
-    if h.page_type == 0:
+    if h.page_type == 0 or h.page_type == 2:
         return decode_snappy(bytes, h.uncompressed_page_size)
     if h.page_type != 3 or h.repetition_levels_byte_length != 0:
         raise Error("Expected a flat numeric data page")
@@ -346,7 +397,7 @@ def load_numeric[
     """Load a named top-level numeric column across all row groups into NuMojo.
 
     One decoded allocation; bounded page-body buffers. The output budget covers
-    values plus validity, not metadata or page buffers. Non-Snappy codecs, dictionary,
+    values plus validity, not metadata or page buffers. Non-Snappy codecs,
     nested, encrypted and mismatched numeric columns are explicitly unsupported.
     CRC verification is not yet implemented. Never returns partially filled data.
     """
@@ -395,8 +446,6 @@ def load_numeric[
             and group.columns[column_index].codec != 1
         ):
             raise Error("Only UNCOMPRESSED and SNAPPY columns are supported")
-        if group.columns[column_index].dictionary_page_offset != -1:
-            raise Error("Dictionary columns are not supported yet")
     var values = empty[dtype]([rows])
     var validity = List[UInt8]()
     validity.reserve(bitmap_bytes)
@@ -405,6 +454,8 @@ def load_numeric[
     var output = 0
     var null_count = 0
     for group in metadata.row_groups:
+        var dictionary = List[Scalar[dtype]]()
+        var has_dictionary = False
         var cursor = _ColumnPages(
             group.columns[column_index].copy(), group.num_rows, 0, page_limits
         )
@@ -413,18 +464,38 @@ def load_numeric[
             if not next:
                 break
             var page = next.value()
-            if page.header.page_type != 0 and page.header.page_type != 3:
-                raise Error(
-                    "Only data pages are supported by the numeric loader"
+            if page.header.page_type == 2:
+                _check_dictionary_header[dtype](
+                    page.header, page_limits.max_page_bytes
                 )
+            elif page.header.page_type != 0 and page.header.page_type != 3:
+                raise Error("Unsupported numeric page type")
             var bytes = file.read_bytes(page.header.compressed_page_size)
             if len(bytes) != page.header.compressed_page_size:
                 raise Error("Short data-page payload read")
             bytes = _numeric_page_body(
                 bytes^, page.header, group.columns[column_index].codec
             )
-            null_count += _decode_plain_page[dtype](
-                bytes, page.header, nullable, values, validity, output
+            if page.header.page_type == 2:
+                dictionary.reserve(page.header.num_values)
+                for i in range(page.header.num_values):
+                    dictionary.append(
+                        _plain_value[dtype](
+                            bytes,
+                            i * (8 if size_of[Scalar[dtype]]() == 8 else 4),
+                        )
+                    )
+                has_dictionary = True
+                continue
+            null_count += _decode_numeric_page[dtype](
+                bytes,
+                page.header,
+                nullable,
+                values,
+                validity,
+                output,
+                dictionary,
+                has_dictionary,
             )
             output += page.header.num_values
     if output != rows:
