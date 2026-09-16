@@ -4,7 +4,7 @@ from std.sys import size_of
 from .io import NewFile
 from .numojo_io import NumericColumn, _check_numeric
 from .format.numeric_writer import _WrittenGroup, _plain_header, _numeric_footer
-from .format.codecs import encode_snappy, snappy_max_compressed_length
+from mojo_snappy import encode_snappy, snappy_max_compressed_length
 
 
 struct NumericWriteOptions(ImplicitlyCopyable):

@@ -4,15 +4,14 @@ channels = ["https://conda.modular.com/max", "conda-forge"]
 name = "pyroquet-next"
 platforms = ["linux-64"]
 version = "0.1.0"
+preview = ["pixi-build"]
 
 [tasks]
-test-codecs = "mojo run -D ASSERT=all -I src tests/test_codecs.mojo"
-test-codecs-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_codecs.mojo -o build/test-codecs && build/test-codecs"
 test-numeric-write = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo"
 test-numeric-write-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo -o build/test-numeric-write && build/test-numeric-write"
 test-publication = "mojo run -D ASSERT=all -I src tests/test_publication.mojo"
 test-publication-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_publication.mojo -o build/test-publication && build/test-publication"
-check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-numojo", "test-publication", "test-numeric-write", "test-codecs"] }
+check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-numojo", "test-publication", "test-numeric-write"] }
 test-numojo = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo"
 test-numojo-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo -o build/test-numojo && build/test-numojo"
 test-pages = "mojo run -D ASSERT=all -I src tests/test_pages.mojo"
@@ -32,4 +31,5 @@ package = "mkdir -p build && mojo precompile -I src -I ../NuMojo src/pyroquet -o
 format = "mojo format src tests examples"
 
 [dependencies]
+mojo-snappy = { path = "../mojo-snappy" }
 mojo = "==1.0.0"

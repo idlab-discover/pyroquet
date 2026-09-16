@@ -14,6 +14,22 @@ Bounded page-header reading and PLAIN numeric body decoding are available with
 uncompressed or native Snappy pages. Non-numeric types, other codecs, and
 dictionary decoding remain open.
 
+## Snappy dependency
+
+Snappy is provided by the separate sibling project [`mojo-snappy`](../mojo-snappy/README.md),
+pinned to Mojo 1.0.0. `pixi.toml` declares `mojo-snappy = { path = "../mojo-snappy" }`;
+`pixi install --locked` builds and installs its `mojo_snappy` package. Keep that
+checkout alongside Pyroquet. The library owns raw codec implementation and codec
+tests; Pyroquet owns Parquet page integration and its three-reader parity tests.
+This local dependency uses Pixi's `pixi-build` preview feature.
+
+Run standalone codec checks from that project:
+
+```sh
+pixi run --manifest-path ../mojo-snappy/pixi.toml check
+pixi run --manifest-path ../mojo-snappy/pixi.toml -e oracle test-interop
+```
+
 ## Development
 
 ```sh
@@ -27,7 +43,6 @@ pixi run test-pages-release
 pixi run test-numojo-release
 pixi run test-publication-release
 pixi run test-numeric-write-release
-pixi run test-codecs-release
 pixi run build
 pixi run package
 pixi run package-compact
@@ -54,7 +69,6 @@ build/oracle-uv/bin/python tests/check_pages.py
 build/oracle-uv/bin/python tests/check_numojo.py
 build/oracle-uv/bin/python tests/check_numeric.py
 build/oracle-uv/bin/python tests/check_numeric_write.py
-build/oracle-uv/bin/python tests/check_codecs.py
 python tests/check_numojo_ownership.py
 ```
 

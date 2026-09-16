@@ -12,7 +12,7 @@ from compact_protocol import CompactLimits
 from .format.footer import _read_footer_bytes_from_file
 from .format.metadata import SchemaElement, parse_metadata, validate_file_ranges
 from .format.pages import PageLimits, PageHeader, _ColumnPages
-from .format.codecs import decode_snappy
+from mojo_snappy import decode_snappy
 
 
 struct NumericColumn[dtype: DType](Movable):
