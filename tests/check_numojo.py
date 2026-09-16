@@ -75,9 +75,11 @@ def main():
     p=OUT/'compressed.parquet'
     pq.write_table(pa.table({'value':pa.array([1],pa.uint32())}),p,compression='snappy',use_dictionary=False)
     count+=compare(p)
+    p=OUT/'dictionary.parquet'
+    pq.write_table(pa.table({'value':pa.array([1,None,1,2**32-1],pa.uint32())}),p,compression='NONE',use_dictionary=True)
+    count+=compare(p)
     for name,kwargs,table in [
       ('unsupported-compression',{'compression':'gzip','use_dictionary':False},pa.table({'value':pa.array([1],pa.uint32())})),
-      ('dictionary',{'compression':'NONE','use_dictionary':True},pa.table({'value':pa.array([1],pa.uint32())})),
       ('signed',{'compression':'NONE','use_dictionary':False},pa.table({'value':pa.array([1],pa.int32())})),
       ('nested',{'compression':'NONE','use_dictionary':False},pa.table({'value':pa.array([[1]],pa.list_(pa.uint32()))})),
     ]:
