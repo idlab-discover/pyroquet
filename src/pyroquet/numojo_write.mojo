@@ -188,55 +188,12 @@ def _write_numeric_chunk[
         nulls += page_nulls
         # Present values occupy physical-width slots in both page formats.
         var level_bytes = len(bytes) - (page_rows - page_nulls) * width
-        var body_size = len(bytes)
-        var compressed = List[UInt8]()
-        var is_compressed = False
-        if options.codec == 1:
-            if options.page_version == 1:
-                compressed = encode_snappy(bytes, options.max_page_bytes)
-                is_compressed = True
-            else:
-                var values_size = body_size - level_bytes
-                # Permit expansion within a bounded temporary buffer, then
-                # retain raw values when compression does not save space.
-                compressed = encode_snappy(
-                    bytes,
-                    snappy_max_compressed_length(values_size),
-                    level_bytes,
-                )
-                is_compressed = len(compressed) < values_size
-        var stored_size = body_size
-        if is_compressed:
-            stored_size = len(compressed)
-            if options.page_version == 2:
-                stored_size += level_bytes
-        var header = _plain_header(
-            page_rows,
-            body_size,
-            options.page_version,
-            page_nulls,
-            level_bytes,
-            stored_size,
-            is_compressed,
+        var raw_size = _write_page(
+            file, bytes^, page_rows, page_nulls, level_bytes, options, offset
         )
-        var size = Int64(len(header)) + Int64(stored_size)
-        if size > Int64.MAX - offset:
-            raise Error("Output file offset overflow")
-        file.write_all(header)
-        if is_compressed:
-            if options.page_version == 2 and level_bytes != 0:
-                var levels = List[UInt8](capacity=level_bytes)
-                for i in range(level_bytes):
-                    levels.append(bytes[i])
-                file.write_all(levels)
-            file.write_all(compressed)
-        else:
-            file.write_all(bytes)
-        var raw_size = Int64(len(header)) + Int64(body_size)
         if raw_size > Int64.MAX - uncompressed_size:
             raise Error("Uncompressed row-group size overflow")
         uncompressed_size += raw_size
-        offset += size
         written += page_rows
     return _WrittenGroup(
         group_offset,
@@ -311,3 +268,62 @@ def save_numeric[
         trailer.append(byte)
     file.write_all(trailer)
     file.finish()
+
+
+def _write_page(
+    mut file: NewFile,
+    var bytes: List[UInt8],
+    page_rows: Int,
+    page_nulls: Int,
+    level_bytes: Int,
+    options: NumericWriteOptions,
+    mut offset: Int64,
+) raises -> Int64:
+    """Emit one physical PLAIN page with shared V1/V2 compression framing."""
+    var body_size = len(bytes)
+    var compressed = List[UInt8]()
+    var is_compressed = False
+    if options.codec == 1:
+        if options.page_version == 1:
+            compressed = encode_snappy(bytes, options.max_page_bytes)
+            is_compressed = True
+        else:
+            var values_size = body_size - level_bytes
+            # Permit expansion within a bounded temporary buffer, then
+            # retain raw values when compression does not save space.
+            compressed = encode_snappy(
+                bytes,
+                snappy_max_compressed_length(values_size),
+                level_bytes,
+            )
+            is_compressed = len(compressed) < values_size
+    var stored_size = body_size
+    if is_compressed:
+        stored_size = len(compressed)
+        if options.page_version == 2:
+            stored_size += level_bytes
+    var header = _plain_header(
+        page_rows,
+        body_size,
+        options.page_version,
+        page_nulls,
+        level_bytes,
+        stored_size,
+        is_compressed,
+    )
+    var size = Int64(len(header)) + Int64(stored_size)
+    if size > Int64.MAX - offset:
+        raise Error("Output file offset overflow")
+    file.write_all(header)
+    if is_compressed:
+        if options.page_version == 2 and level_bytes != 0:
+            var levels = List[UInt8](capacity=level_bytes)
+            for i in range(level_bytes):
+                levels.append(bytes[i])
+            file.write_all(levels)
+        file.write_all(compressed)
+    else:
+        file.write_all(bytes)
+    var raw_size = Int64(len(header)) + Int64(body_size)
+    offset += size
+    return raw_size

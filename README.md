@@ -3,7 +3,8 @@
 A Mojo-native Parquet rewrite using **Mojo 1.0.0** and Pixi.
 Native storage supports consuming freeze, shared immutable slices, and borrowed
 views. Schema-bearing flat tables own arbitrary combinations of ten numeric
-dtypes, with ordered projection and multi-column load/save. Typed numeric-column
+dtypes, Boolean, binary, and fixed-length binary columns, with ordered projection
+and multi-column load/save. Typed numeric-column
 entry points remain available. Reading supports PLAIN and dictionary V1/V2 pages
 with uncompressed or native Snappy bodies; writing emits bounded PLAIN pages.
 Compact Protocol remains an independently buildable Mojo package.
@@ -263,7 +264,7 @@ An explicit empty `List[String]` selects zero columns while retaining the file
 row count. All footer structure and local chunk/index ranges are validated even
 for unselected fields. Only selected page bodies are decoded, so unsupported
 unselected types/codecs/encodings can be projected away. Selected nested or
-non-numeric fields raise an error. CRCs are not checked.
+unsupported fields (including UTF-8/STRING) raise an error. CRCs are not checked.
 
 `Table(schema, columns, num_rows)` takes ownership of `List[Column]`; each
 `Column(NumericColumn[dtype])` moves its native allocation into a heterogeneous
@@ -298,3 +299,61 @@ python tests/check_table_ownership.py
 build/oracle-uv/bin/python tests/check_mixed.py
 build/oracle-uv/bin/python tests/check_numeric_dictionary.py
 ```
+
+
+## Boolean and raw binary columns
+
+`load_table` / `save_table` support `SchemaNode.BOOLEAN`, `BINARY`, and
+`FIXED_BINARY`, mixed with numeric columns. Reads accept PLAIN and binary
+PLAIN_DICTIONARY/RLE_DICTIONARY pages, plus RLE Boolean values, in V1/V2 with
+UNCOMPRESSED or SNAPPY. Writes emit PLAIN. STRING/UTF8 and other logical byte
+annotations remain unsupported; raw bytes are never interpreted as text.
+
+`column.boolean().value(row)` returns `Optional[Bool]`. For binary columns,
+`column.binary().is_valid(row)` distinguishes null from empty;
+`column.binary().value(row)` borrows an immutable `Span[UInt8]` and raises on
+null access. The compiler prevents this span from outliving its column.
+`column.kind()` discovers the schema identity; numeric `dtype()` and
+`numeric[dtype]()` reject these non-numeric types.
+
+```mojo
+from pyroquet.binary_column import BinaryBuilder
+
+var builder = BinaryBuilder(max_bytes=1024)
+var bytes: List[UInt8] = [0, 255, 128]
+builder.append(Span(bytes))
+builder.append_null()
+var binary = builder^.freeze()
+```
+
+Build a table column with `Column("payload", binary^)` and a matching
+`SchemaNode("payload", SchemaNode.BINARY, 0, nullable=True)`. Boolean storage uses
+`BooleanColumn(count, packed_values, packed_validity)` with LSB-first bitmaps;
+an empty validity bitmap means all valid. Fixed binary uses
+`BinaryBuilder(fixed_width=N)` (or `BinaryColumn(..., fixed_width=N)`) and
+`SchemaNode(..., SchemaNode.FIXED_BINARY, ..., fixed_width=N)`; present values
+must have exactly that positive width. Null values consume no arena bytes.
+
+Binary storage uses one byte arena plus native signed 64-bit offsets and a
+separate validity bitmap. Builder `max_bytes` bounds arena bytes; the table
+loader's aggregate `max_output_bytes` additionally counts offsets and bitmaps.
+Page/dictionary staging and allocator spare capacity are separate from retained
+logical payload limits. A dictionary's byte arena plus offsets is bounded by
+`PageLimits.max_page_bytes`. Binary writes reject any page, including a single
+oversized value, that exceeds `ColumnWriteOptions.max_page_bytes`; reduce
+`page_rows` or increase the explicit budget. Failed writes do not publish a file.
+
+```sh
+pixi run test-binary
+pixi run test-binary-release
+python tests/check_binary_ownership.py
+pixi run mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/roundtrip_binary.mojo -o build/roundtrip-binary
+build/oracle-uv/bin/python tests/check_binary.py
+build/oracle-uv/bin/python tests/check_binary_wire.py
+```
+
+The corpus records complete byte values, nulls, schema, producer versions and
+hashes. Known oracle exceptions remain explicit: Fastparquet V2 nullable pages,
+Boolean RLE interpretation, trailing NUL loss in fixed binary dictionaries,
+and surplus PLAIN writer padding; DuckDB short-stream hybrid padding and its
+lack of a fixed-width BLOB writer type. Unsupported comparisons are not passes.
