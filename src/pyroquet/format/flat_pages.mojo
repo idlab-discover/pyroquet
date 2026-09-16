@@ -148,10 +148,9 @@ def _page_body(
     if levels < 0 or levels > len(bytes) or levels > h.uncompressed_page_size:
         raise Error("V2 levels exceed page body")
     var values = decode_snappy(bytes, h.uncompressed_page_size - levels, levels)
-    var body = List[UInt8]()
-    body.reserve(h.uncompressed_page_size)
-    for i in range(levels):
-        body.append(bytes[i])
-    for value in values:
-        body.append(value)
+    if levels == 0:
+        return values^
+    var body = List[UInt8](capacity=h.uncompressed_page_size)
+    body.extend(Span(bytes)[:levels])
+    body.extend(Span(values))
     return body^

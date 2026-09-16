@@ -296,6 +296,11 @@ def test_snappy_page_sections() raises:
     assert_equal(body[3], UInt8(4))
     h.page_type = 3
     h.repetition_levels_byte_length = 0
+    h.definition_levels_byte_length = 0
+    body = _page_body([4, 12, 1, 2, 3, 4], h, 1)
+    assert_equal(len(body), 4)
+    for i in range(4):
+        assert_equal(body[i], UInt8(i + 1))
     h.definition_levels_byte_length = 2
     h.compressed_page_size = 8
     h.uncompressed_page_size = 6
