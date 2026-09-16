@@ -234,6 +234,106 @@ def test_batches_repeated_mixed_runs_and_destination_capacity() raises:
         _ = decoder.next_batch(data, Span(scratch), 1)
 
 
+def test_batch_capacity_alignment_padding_and_destination_guards() raises:
+    var boundaries: List[Int] = [1, 7, 8, 9, 63, 64, 65]
+    for width in range(33):
+        var expected = List[UInt32]()
+        var mask = UInt32(0xFFFFFFFF)
+        if width < 32:
+            mask = (UInt32(1) << UInt32(width)) - 1
+        for i in range(144):
+            # Include the largest representable value, including UInt32.MAX.
+            expected.append(
+                mask if i % 7 == 0 else UInt32(i) * UInt32(0x13579BDF) & mask
+            )
+        for padding in range(8):
+            for boundary in range(len(boundaries)):
+                var capacity = boundaries[boundary]
+                var limit = boundaries[(boundary + padding) % len(boundaries)]
+                var offset = 1 + (boundary + padding + width) % 9
+                var data = List[UInt8](length=offset, fill=0xFF)
+                data.append(37)  # Eighteen packed groups.
+                for _ in range(width * 18):
+                    data.append(0)
+                for i in range(144):
+                    for bit in range(width):
+                        var pos = i * width + bit
+                        data[offset + 1 + pos // 8] |= UInt8(
+                            (expected[i] >> UInt32(bit)) & 1
+                        ) << UInt8(pos % 8)
+                # The source ends at the payload: a short last load cannot
+                # rely on another run or an accessible suffix allocation.
+                var count = 144 - padding
+                var decoder = _HybridDecoder(offset, len(data), width, count)
+                var scratch = List[UInt32](length=capacity + 2, fill=0xA5A5A5A5)
+                var consumed = 0
+                for _ in range(padding):
+                    assert_equal(decoder.next(data), expected[consumed])
+                    consumed += 1
+                while consumed < count:
+                    for i in range(len(scratch)):
+                        scratch[i] = 0xA5A5A5A5
+                    var batch = decoder.next_batch(
+                        data, Span(scratch)[1 : capacity + 1], limit
+                    )
+                    assert_equal(batch[1], False)
+                    assert_equal(
+                        batch[0],
+                        min(count - consumed, min(64, min(capacity, limit))),
+                    )
+                    assert_equal(scratch[0], UInt32(0xA5A5A5A5))
+                    for i in range(batch[0]):
+                        assert_equal(scratch[i + 1], expected[consumed + i])
+                    for i in range(batch[0] + 1, len(scratch)):
+                        assert_equal(scratch[i], UInt32(0xA5A5A5A5))
+                    consumed += batch[0]
+                    if consumed < count:
+                        assert_equal(decoder.next(data), expected[consumed])
+                        consumed += 1
+                decoder.finish()
+
+
+def test_all_widths_packed_batches_across_run_transitions() raises:
+    for width in range(33):
+        var mask = UInt32(0xFFFFFFFF)
+        if width < 32:
+            mask = (UInt32(1) << UInt32(width)) - 1
+        for offset in range(1, 10):
+            var data = List[UInt8](length=offset, fill=0xFF)
+            var expected = List[UInt32]()
+            # Two full-sized packed runs separated by RLE ensure speculative
+            # packed reads cannot consume framing or reuse stale reservoir bits.
+            for run in range(2):
+                data.append(6)
+                for _ in range((width + 7) // 8):
+                    data.append(0)
+                for _ in range(3):
+                    expected.append(0)
+                data.append(21)
+                for _ in range(width * 10):
+                    data.append(0xFF)
+                var present = 80 if run == 0 else 80 - (offset - 1) % 8
+                for _ in range(present):
+                    expected.append(mask)
+            var decoder = _HybridDecoder(
+                offset, len(data), width, len(expected)
+            )
+            var scratch = List[UInt32](length=65, fill=0xA5A5A5A5)
+            var consumed = 0
+            while consumed < len(expected):
+                var batch = decoder.next_batch(data, Span(scratch)[:64], 65)
+                for i in range(batch[0]):
+                    assert_equal(
+                        scratch[0 if batch[1] else i], expected[consumed + i]
+                    )
+                assert_equal(scratch[64], UInt32(0xA5A5A5A5))
+                consumed += batch[0]
+                if consumed < len(expected):
+                    assert_equal(decoder.next(data), expected[consumed])
+                    consumed += 1
+            decoder.finish()
+
+
 def test_invalid_batch_arguments_and_short_buffer() raises:
     var data: List[UInt8] = [2, 1]
     var decoder = _HybridDecoder(0, len(data), 1, 1)

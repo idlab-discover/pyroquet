@@ -204,5 +204,75 @@ def test_empty_dictionary_zero_present_and_trailing_rejection() raises:
         )
 
 
+def _wide_packed_ids(width: Int, invalid: Int = -1) -> List[UInt8]:
+    var data: List[UInt8] = [UInt8(width), 19]
+    for _ in range(width * 9):
+        data.append(0)
+    var mask = UInt32(0xFFFFFFFF)
+    if width < 32:
+        mask = (UInt32(1) << UInt32(width)) - 1
+    for i in range(72):
+        # Cardinality one: every nonzero ID is invalid, but unused final
+        # padding must never be checked against the dictionary cardinality.
+        var value = mask if i >= 65 or i == invalid else UInt32(0)
+        for bit in range(width):
+            var pos = i * width + bit
+            data[2 + pos // 8] |= UInt8((value >> UInt32(bit)) & 1) << UInt8(
+                pos % 8
+            )
+    return data^
+
+
+def test_all_packed_widths_invalid_consumed_ids_and_output_guards() raises:
+    var dictionary: List[UInt32] = [0x12345678]
+    var bitmap = List[UInt8]()
+    var values = empty[DType.uint32]([67])
+    var pointer = values.unsafe_ptr()
+    var invalid_positions: List[Int] = [0, 31, 63, 64]
+    for width in range(33):
+        var data = _wide_packed_ids(width)
+        pointer[unsafe_offset=0] = 0xA5A5A5A5
+        pointer[unsafe_offset=66] = 0xA5A5A5A5
+        assert_equal(
+            _decode_numeric_page[DType.uint32](
+                data, _header(65), False, values, bitmap, 1, dictionary, True
+            ),
+            0,
+        )
+        for i in range(65):
+            assert_equal(pointer[unsafe_offset=i + 1], dictionary[0])
+        assert_equal(pointer[unsafe_offset=0], UInt32(0xA5A5A5A5))
+        assert_equal(pointer[unsafe_offset=66], UInt32(0xA5A5A5A5))
+        if width == 0:
+            var empty_dictionary = List[UInt32]()
+            with assert_raises():
+                _ = _decode_numeric_page[DType.uint32](
+                    data,
+                    _header(65),
+                    False,
+                    values,
+                    bitmap,
+                    1,
+                    empty_dictionary,
+                    True,
+                )
+        else:
+            for invalid in invalid_positions:
+                data = _wide_packed_ids(width, invalid)
+                with assert_raises():
+                    _ = _decode_numeric_page[DType.uint32](
+                        data,
+                        _header(65),
+                        False,
+                        values,
+                        bitmap,
+                        1,
+                        dictionary,
+                        True,
+                    )
+                assert_equal(pointer[unsafe_offset=0], UInt32(0xA5A5A5A5))
+                assert_equal(pointer[unsafe_offset=66], UInt32(0xA5A5A5A5))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
