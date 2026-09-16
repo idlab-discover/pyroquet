@@ -1,10 +1,11 @@
 """Bounded Parquet RLE/bit-packed integers, excluding any framing prefix."""
+from std.sys.info import is_little_endian
 
 
 struct _HybridDecoder(Movable):
     """Stream exactly count integers without allocating from wire run lengths.
 
-    Call next with the same immutable byte buffer for each value, then finish.
+    Call next or next_batch with the same immutable byte buffer, then finish.
     Only a final packed group may contain up to seven unused values. Framing
     (dictionary width byte or V1 level length) belongs to the caller.
     """
@@ -92,33 +93,87 @@ struct _HybridDecoder(Movable):
             if self._width < 32 and (self._value >> UInt32(self._width)) != 0:
                 raise Error("hybrid repeated value exceeds bit width")
 
-    @always_inline
-    def next(mut self, data: List[UInt8]) raises -> UInt32:
+    def _prepare(mut self, data: List[UInt8]) raises:
         if self._end > len(data):
             raise Error("hybrid stream exceeds buffer")
         if self._left == 0:
             raise Error("hybrid value count exhausted")
         if self._run_left == 0:
             self._start_run(data)
-        var value = self._value
-        if self._packed:
-            # Retain leftover bits across values; each packed byte is read once.
-            # The validated whole-group payload bounds every refill. At most
-            # 39 bits are live (32 requested plus seven from the last byte).
-            while self._bits < self._width:
-                self._buffer |= UInt64(data[self._byte_pos]) << UInt64(
-                    self._bits
+
+    # Preserve inlining of the packed extraction formerly inside next.
+    @always_inline
+    def _packed_value(mut self, data: List[UInt8]) -> UInt32:
+        var value = self._buffer
+        if self._bits < self._width:
+            var low = self._bits
+            if is_little_endian() and self._pos - self._byte_pos >= 8:
+                self._buffer = (
+                    data.unsafe_ptr()
+                    .unsafe_offset(self._byte_pos)
+                    .unsafe_bitcast[UInt64]()
+                    .unsafe_load[alignment=1]()
                 )
-                self._byte_pos += 1
-                self._bits += 8
-            value = UInt32(
-                self._buffer & ((UInt64(1) << UInt64(self._width)) - 1)
-            )
+                self._byte_pos += 8
+                self._bits = 64
+            else:
+                self._buffer = 0
+                self._bits = 0
+                # _start_run validated the complete packed payload. Do not
+                # read a following run or outside this bounded substream.
+                while self._byte_pos < self._pos and self._bits < 56:
+                    self._buffer |= UInt64(data[self._byte_pos]) << UInt64(
+                        self._bits
+                    )
+                    self._byte_pos += 1
+                    self._bits += 8
+            var take = self._width - low
+            value |= self._buffer << UInt64(low)
+            self._buffer >>= UInt64(take)
+            self._bits -= take
+        else:
             self._buffer >>= UInt64(self._width)
             self._bits -= self._width
+        return UInt32(value & ((UInt64(1) << UInt64(self._width)) - 1))
+
+    @always_inline
+    def next(mut self, data: List[UInt8]) raises -> UInt32:
+        self._prepare(data)
+        var value = self._value
+        if self._packed:
+            value = self._packed_value(data)
         self._run_left -= 1
         self._left -= 1
         return value
+
+    def next_batch[
+        O: MutOrigin
+    ](
+        mut self,
+        data: List[UInt8],
+        destination: Span[UInt32, O],
+        limit: Int,
+    ) raises -> Tuple[Int, Bool]:
+        """Consume one run portion, returning (count, repeated).
+
+        Repeated batches put one ID in destination[0] and may consume up to
+        limit values. Packed batches write count IDs, bounded by limit, the
+        destination length and 64. No allocation depends on a wire run length.
+        Scalar and batch calls may be interleaved without alignment constraints.
+        """
+        if limit <= 0 or len(destination) == 0:
+            raise Error("hybrid batch requires positive capacity and limit")
+        self._prepare(data)
+        var count = min(limit, min(self._left, self._run_left))
+        if self._packed:
+            count = min(count, min(len(destination), 64))
+            for i in range(count):
+                destination[i] = self._packed_value(data)
+        else:
+            destination[0] = self._value
+        self._run_left -= count
+        self._left -= count
+        return (count, not self._packed)
 
     def finish(self) raises:
         if self._left != 0:

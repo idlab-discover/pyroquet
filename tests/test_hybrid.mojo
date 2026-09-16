@@ -3,10 +3,19 @@ from std.testing import assert_equal, assert_raises, TestSuite
 from pyroquet.format.hybrid import _HybridDecoder
 
 
-def _decode(data: List[UInt8], width: Int, count: Int) raises:
+def _decode(
+    data: List[UInt8], width: Int, count: Int, batched: Bool = False
+) raises:
     var decoder = _HybridDecoder(0, len(data), width, count)
-    for _ in range(count):
-        _ = decoder.next(data)
+    if batched:
+        var scratch: List[UInt32] = [0, 0, 0]
+        var left = count
+        while left > 0:
+            var batch = decoder.next_batch(data, Span(scratch), left)
+            left -= batch[0]
+    else:
+        for _ in range(count):
+            _ = decoder.next(data)
     decoder.finish()
 
 
@@ -101,32 +110,33 @@ def test_malformed_runs() raises:
     var trailing: List[UInt8] = [2, 0, 0]
     var enormous_rle: List[UInt8] = [254, 255, 255, 255, 15]
     var enormous_packed: List[UInt8] = [255, 255, 255, 255, 15]
-    with assert_raises():
-        _decode(truncated_header, 1, 1)
-    with assert_raises():
-        _decode(overflowing_header, 1, 1)
-    with assert_raises():
-        _decode(zero_rle, 1, 1)
-    with assert_raises():
-        _decode(zero_packed, 1, 1)
-    with assert_raises():
-        _decode(short_rle, 1, 1)
-    with assert_raises():
-        _decode(short_packed, 2, 8)
-    with assert_raises():
-        _decode(long_rle, 1, 1)
-    with assert_raises():
-        _decode(long_packed, 1, 1)
-    with assert_raises():
-        _decode(padding_then_run, 1, 1)
-    with assert_raises():
-        _decode(high_rle_bits, 1, 1)
-    with assert_raises():
-        _decode(trailing, 1, 1)
-    with assert_raises():
-        _decode(enormous_rle, 0, 1)
-    with assert_raises():
-        _decode(enormous_packed, 0, 2147483647)
+    for batched in range(2):
+        with assert_raises():
+            _decode(truncated_header, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(overflowing_header, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(zero_rle, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(zero_packed, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(short_rle, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(short_packed, 2, 8, Bool(batched))
+        with assert_raises():
+            _decode(long_rle, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(long_packed, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(padding_then_run, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(high_rle_bits, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(trailing, 1, 1, Bool(batched))
+        with assert_raises():
+            _decode(enormous_rle, 0, 1, Bool(batched))
+        with assert_raises():
+            _decode(enormous_packed, 0, 2147483647, Bool(batched))
 
 
 def test_invalid_bounds_and_unfinished() raises:
@@ -147,6 +157,101 @@ def test_invalid_bounds_and_unfinished() raises:
     with assert_raises():
         var decoder = _HybridDecoder(0, 0, 1, 1)
         decoder.finish()
+
+
+def test_batches_all_widths_and_partial_scalar_consumption() raises:
+    for width in range(33):
+        # Eighteen complete groups exercise word refills and 64-ID boundaries.
+        var data: List[UInt8] = [37]
+        for _ in range(width * 18):
+            data.append(0)
+        var expected = List[UInt32]()
+        for i in range(144):
+            var value = UInt32(i) * UInt32(0x13579BDF)
+            if width < 32:
+                value &= (UInt32(1) << UInt32(width)) - 1
+            expected.append(value)
+            for bit in range(width):
+                var pos = i * width + bit
+                data[1 + pos // 8] |= UInt8(
+                    (value >> UInt32(bit)) & 1
+                ) << UInt8(pos % 8)
+        var scratch = List[UInt32]()
+        for _ in range(96):
+            scratch.append(0xFFFFFFFF)
+        for count in range(137, 145):
+            for limit in range(63, 66):
+                var decoder = _HybridDecoder(0, len(data), width, count)
+                # Begin batches at a non-byte-aligned position for odd widths.
+                assert_equal(decoder.next(data), expected[0])
+                var consumed = 1
+                while consumed < count:
+                    var batch = decoder.next_batch(data, Span(scratch), limit)
+                    assert_equal(batch[1], False)
+                    assert_equal(
+                        batch[0], min(64, min(limit, count - consumed))
+                    )
+                    for i in range(batch[0]):
+                        assert_equal(scratch[i], expected[consumed + i])
+                    # Capacity above the documented bound is untouched.
+                    assert_equal(scratch[64], UInt32(0xFFFFFFFF))
+                    consumed += batch[0]
+                    if consumed < count:
+                        assert_equal(decoder.next(data), expected[consumed])
+                        consumed += 1
+                decoder.finish()
+
+
+def test_batches_repeated_mixed_runs_and_destination_capacity() raises:
+    var data: List[UInt8] = [99, 0x80, 2, 5, 3, 0x88, 0xC6, 0xFA, 4, 2, 99]
+    var decoder = _HybridDecoder(1, 10, 3, 138)
+    var scratch: List[UInt32] = [0, 0, 0]
+    var batch = decoder.next_batch(data, Span(scratch), 65)
+    assert_equal(batch[0], 65)
+    assert_equal(batch[1], True)
+    assert_equal(scratch[0], UInt32(5))
+    assert_equal(decoder.next(data), UInt32(5))
+    batch = decoder.next_batch(data, Span(scratch), 1000)
+    assert_equal(batch[0], 62)
+    assert_equal(batch[1], True)
+    for base in range(2):
+        batch = decoder.next_batch(data, Span(scratch), 1000)
+        assert_equal(batch[0], 3)
+        assert_equal(batch[1], False)
+        for i in range(3):
+            assert_equal(scratch[i], UInt32(base * 3 + i))
+    assert_equal(decoder.next(data), UInt32(6))
+    batch = decoder.next_batch(data, Span(scratch), 1000)
+    assert_equal(batch[0], 1)
+    assert_equal(batch[1], False)
+    assert_equal(scratch[0], UInt32(7))
+    batch = decoder.next_batch(data, Span(scratch), 1000)
+    assert_equal(batch[0], 2)
+    assert_equal(batch[1], True)
+    assert_equal(scratch[0], UInt32(2))
+    decoder.finish()
+    with assert_raises():
+        _ = decoder.next_batch(data, Span(scratch), 1)
+
+
+def test_invalid_batch_arguments_and_short_buffer() raises:
+    var data: List[UInt8] = [2, 1]
+    var decoder = _HybridDecoder(0, len(data), 1, 1)
+    var scratch: List[UInt32] = [0]
+    var empty = List[UInt32]()
+    with assert_raises():
+        _ = decoder.next_batch(data, Span(empty), 1)
+    with assert_raises():
+        _ = decoder.next_batch(data, Span(scratch), 0)
+    with assert_raises():
+        _ = decoder.next_batch(data, Span(scratch), -1)
+    # Argument errors did not consume stream state.
+    assert_equal(decoder.next_batch(data, Span(scratch), 1)[0], 1)
+    assert_equal(scratch[0], UInt32(1))
+    decoder.finish()
+    decoder = _HybridDecoder(0, len(data) + 1, 1, 1)
+    with assert_raises():
+        _ = decoder.next_batch(data, Span(scratch), 1)
 
 
 def main() raises:

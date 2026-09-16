@@ -82,6 +82,47 @@ def _plain_value[
             return bits.cast[dtype]()
 
 
+def _gather_dictionary[
+    dtype: DType, origin: MutOrigin
+](
+    bytes: List[UInt8],
+    mut ids: _HybridDecoder,
+    dictionary: List[Scalar[dtype]],
+    destination: Span[Scalar[dtype], origin],
+) raises:
+    """Gather validated runs into an all-present, bounded destination."""
+    var scratch = List[UInt32](length=64, fill=0)
+    var output = 0
+    var pointer = destination.unsafe_ptr()
+    while output < len(destination):
+        var batch = ids.next_batch(
+            bytes, Span(scratch), len(destination) - output
+        )
+        var count = batch[0]
+        if batch[1]:
+            var index = scratch[0]
+            if UInt64(index) >= UInt64(len(dictionary)):
+                raise Error("Dictionary ID outside dictionary")
+            var value = dictionary[Int(index)]
+            var end = output + count
+            while end - output >= 8:
+                pointer.unsafe_offset(output).unsafe_store(
+                    SIMD[dtype, 8](value)
+                )
+                output += 8
+            while output < end:
+                pointer[unsafe_offset=output] = value
+                output += 1
+        else:
+            for i in range(count):
+                var index = scratch[i]
+                if UInt64(index) >= UInt64(len(dictionary)):
+                    raise Error("Dictionary ID outside dictionary")
+                pointer[unsafe_offset=output + i] = dictionary[Int(index)]
+            output += count
+    ids.finish()
+
+
 def _decode_numeric_page_impl[
     dtype: DType, indexed: Bool, origin: MutOrigin
 ](
@@ -135,6 +176,12 @@ def _decode_numeric_page_impl[
         ids = _HybridDecoder(
             data_start + 1, len(bytes), Int(bytes[data_start]), present
         )
+    comptime if indexed:
+        if nulls == 0:
+            _gather_dictionary[dtype](
+                bytes, ids, dictionary, values[output : output + present]
+            )
+            return 0
     var pointer = values.unsafe_ptr()
     var pos = data_start
     for i in range(h.num_values):
