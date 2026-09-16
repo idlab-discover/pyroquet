@@ -61,6 +61,9 @@ struct BinaryColumn(Copyable, Movable, Sized):
     def null_count(self) -> Int:
         return self._null_count
 
+    def byte_size(self) -> Int:
+        return len(self._bytes)
+
     def fixed_width(self) -> Int:
         return self._fixed_width
 
@@ -99,12 +102,20 @@ struct BinaryBuilder(Movable, Sized):
     var _fixed_width: Int
 
     def __init__(
-        out self, max_bytes: Int = 1073741824, fixed_width: Int = 0
+        out self,
+        max_bytes: Int = 1073741824,
+        fixed_width: Int = 0,
+        byte_capacity: Int = 0,
     ) raises:
-        if max_bytes < 0 or fixed_width < 0:
+        if (
+            max_bytes < 0
+            or fixed_width < 0
+            or byte_capacity < 0
+            or byte_capacity > max_bytes
+        ):
             raise Error("Negative binary storage limit or width")
         self._offsets = [0]
-        self._bytes = List[UInt8]()
+        self._bytes = List[UInt8](capacity=byte_capacity)
         self._validity = List[UInt8]()
         self._limit = max_bytes
         self._fixed_width = fixed_width
@@ -118,8 +129,7 @@ struct BinaryBuilder(Movable, Sized):
         if len(bytes) > self._limit - len(self._bytes):
             raise Error("Binary byte budget exceeded")
         self._append_row(True)
-        for byte in bytes:
-            self._bytes.append(byte)
+        self._bytes.extend(bytes)
         self._offsets.append(len(self._bytes))
 
     def append_null(mut self) raises:

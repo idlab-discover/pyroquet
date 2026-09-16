@@ -38,7 +38,7 @@ def decode_plain_binary(
             raise Error("Trailing binary payload bytes")
     if total > max_bytes:
         raise Error("Binary byte budget exceeded")
-    var builder = BinaryBuilder(max_bytes, fixed_width)
+    var builder = BinaryBuilder(max_bytes, fixed_width, byte_capacity=total)
     pos = 0
     for _ in range(count):
         var width = fixed_width
