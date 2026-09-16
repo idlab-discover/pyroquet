@@ -214,6 +214,29 @@ def wire(path, expected, version, codec):
     assert previous_end == len(raw) - 8 - int.from_bytes(raw[-8:-4], 'little')
 
 
+def zero_column_file_checks(db):
+    path = OUT / 'zero-column-arrow.parquet'
+    pq.write_table(pa.table({}), path)
+    assert pq.read_table(path).shape == (0, 0)
+    assert fastparquet.ParquetFile(path).to_pandas().shape == (0, 0)
+    probe(path, [], 0, budget=0)
+    try:
+        db.execute('SELECT * FROM read_parquet(?)', [str(path)]).fetchall()
+    except duckdb.InvalidInputException as error:
+        assert 'Need at least one non-root column' in str(error)
+        LIMITATIONS.append({'file': path.name, 'oracle': 'DuckDB reader', 'status': 'unsupported',
+                            'feature': 'zero-column file; PyArrow/Fastparquet/native zero-row reads passed'})
+    else:
+        raise AssertionError('DuckDB zero-column support changed; review and update matrix')
+    target = OUT / 'zero-column-native.parquet'
+    target.unlink(missing_ok=True)
+    before = set(OUT.iterdir())
+    result = subprocess.run([str(WRITE), str(path), str(target), '1', '0'], capture_output=True, text=True)
+    assert result.returncode != 0
+    assert 'zero' in (result.stdout + result.stderr).lower()
+    assert set(OUT.iterdir()) == before
+
+
 def projection_structure_checks():
     table = pa.table({'good': pa.array([1, None, 3], pa.int32()), 'unsupported': ['a', 'b', 'c']})
     path = OUT / 'unsupported-unselected.parquet'
@@ -252,6 +275,7 @@ def main():
         subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', '-I', '../NuMojo', f'tests/{source}.mojo', '-o', str(target)], cwd=ROOT, check=True)
     db = duckdb.connect()
     projection_structure_checks()
+    zero_column_file_checks(db)
     records = []
     for label, table in [('mixed', fixture()), ('reverse', fixture(reverse=True)), ('empty', fixture(0))]:
         expected = manifest(table)
