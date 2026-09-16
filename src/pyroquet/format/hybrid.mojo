@@ -146,6 +146,41 @@ struct _HybridDecoder(Movable):
         self._left -= 1
         return value
 
+    def _packed_groups[
+        width: Int, O: MutOrigin
+    ](
+        mut self, data: List[UInt8], destination: Span[UInt32, O], count: Int
+    ) -> Int:
+        comptime assert 14 <= width <= 18
+        # Called only at an eight-value group boundary. Reconstruct the logical
+        # cursor, discarding any reservoir prefetch from a preceding scalar call.
+        var offset = self._pos - (self._run_left // 8) * width
+        var written = 0
+        # The last lane's unaligned word must fit this run, including lookahead.
+        while (
+            count - written >= 8 and self._pos - offset >= (7 * width) // 8 + 4
+        ):
+            var lanes = SIMD[DType.uint32, 8]()
+            var shifts = SIMD[DType.uint32, 8]()
+            comptime for lane in range(8):
+                lanes[lane] = (
+                    data.unsafe_ptr()
+                    .unsafe_offset(offset + lane * width // 8)
+                    .unsafe_bitcast[UInt32]()
+                    .unsafe_load[alignment=1]()
+                )
+                shifts[lane] = UInt32(lane * width % 8)
+            destination.unsafe_ptr().unsafe_offset(written).unsafe_store(
+                (lanes >> shifts) & UInt32((1 << width) - 1)
+            )
+            offset += width
+            written += 8
+        # The fallback and the next scalar call resume at the exact next bit.
+        self._byte_pos = offset
+        self._buffer = 0
+        self._bits = 0
+        return written
+
     def next_batch[
         O: MutOrigin
     ](
@@ -167,8 +202,16 @@ struct _HybridDecoder(Movable):
         var count = min(limit, min(self._left, self._run_left))
         if self._packed:
             count = min(count, min(len(destination), 64))
-            for i in range(count):
-                destination[i] = self._packed_value(data)
+            var written = 0
+            if is_little_endian() and count >= 8 and self._run_left % 8 == 0:
+                comptime for width in range(14, 19):
+                    if self._width == width:
+                        written = self._packed_groups[width](
+                            data, destination, count
+                        )
+            while written < count:
+                destination[written] = self._packed_value(data)
+                written += 1
         else:
             destination[0] = self._value
         self._run_left -= count
