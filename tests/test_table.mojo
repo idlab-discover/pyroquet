@@ -200,6 +200,8 @@ def test_mixed_numeric_borrows() raises:
     )
     var nodes: List[SchemaNode] = [SchemaNode("root", SchemaNode.GROUP, -1)]
     var columns = List[Column]()
+    var value_addresses = List[Int]()
+    var validity_addresses = List[Int]()
     comptime for i in range(len(dtypes)):
         comptime dtype = dtypes[i]
         var name = String(i)
@@ -210,12 +212,25 @@ def test_mixed_numeric_borrows() raises:
         values.unsafe_ptr()[unsafe_offset=0] = Scalar[dtype].MAX
         values.unsafe_ptr()[unsafe_offset=1] = 0
         values.unsafe_ptr()[unsafe_offset=2] = Scalar[dtype].MIN
-        columns.append(Column(NumericColumn(values^, [UInt8(5)], name, 1)))
-    var table = Table(Schema(nodes^), columns^, 3)
+        var validity: List[UInt8] = [5]
+        # Preserve only integer addresses across moves, never escaped pointers.
+        value_addresses.append(Int(values.unsafe_ptr()))
+        validity_addresses.append(Int(Span(validity).unsafe_ptr()))
+        columns.append(Column(NumericColumn(values^, validity^, name, 1)))
+    var owner = Table(Schema(nodes^), columns^, 3)
+    var table = owner^
     assert_equal(table.num_rows(), 3)
     assert_equal(table.num_columns(), 10)
     comptime for i in range(len(dtypes)):
         comptime dtype = dtypes[i]
+        assert_equal(
+            Int(table.column(i).numeric[dtype]().values().unsafe_ptr()),
+            value_addresses[i],
+        )
+        assert_equal(
+            Int(table.column(i).numeric[dtype]().validity().unsafe_ptr()),
+            validity_addresses[i],
+        )
         assert_equal(table.column(i).dtype(), dtype)
         assert_equal(table.column(i).name(), String(i))
         assert_equal(table.schema().node(i + 1).dtype(), dtype)
