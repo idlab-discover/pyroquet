@@ -229,8 +229,8 @@ def known_fastparquet_defect(path,error,public):
 def specials(dtype):
     bits=getattr(pa,dtype)().bit_width
     if dtype.startswith('float'):
-        return ([0,0x80000000,0x7f800000,0xff800000,0x7fc00001,0xffc12345] if bits==32 else
-                [0,0x8000000000000000,0x7ff0000000000000,0xfff0000000000000,0x7ff8000000000001,0xfff8123456789abc])
+        return ([0,0x80000000,0x7f800000,0xff800000,0x7fc00001,0xffc12345,0x7f800001,1] if bits==32 else
+                [0,0x8000000000000000,0x7ff0000000000000,0xfff0000000000000,0x7ff8000000000001,0xfff8123456789abc,0x7ff0000000000001,1])
     signed=dtype.startswith('int')
     return [0,1,-1 if signed else 2,(1<<(bits-int(signed)))-1,-(1<<(bits-1)) if signed else 1<<(bits-1)]
 
@@ -283,6 +283,13 @@ def synthetic_cases():
             check(path,'int32',[cardinality-1]*15 if name=='rle' else ids)
     for version in (1,2):
         for codec in (0,1):
+            # Exercise entry materialization beyond small List allocations and
+            # ID batches; every entry is observed in deliberately reversed order.
+            values=list(range(4097));ids=list(reversed(values))
+            path=OUT/f'large-dictionary-v{version}-c{codec}.parquet'
+            pages=[dictionary(values,'int32',codec),data(ids,13,version,codec)]
+            path.write_bytes(fixture('int32',[(pages,len(ids))],codec=codec))
+            check(path,'int32',ids)
             groups=[];expected=[]
             for values in ([11,22,33],[33,11,22]):
                 ids=[0,None,1,2,None];nulls=[None]*9
@@ -313,12 +320,46 @@ def synthetic_cases():
     for dtype in ('int8','uint8','int16','uint16'):
         bits=getattr(pa,dtype)().bit_width
         malformed['narrow-'+dtype]=([dictionary([1<<(bits-int(dtype.startswith('int')))],dtype),data([0]*3,0)],3,dtype)
+        signed=dtype.startswith('int')
+        for label,invalid in [('high',1<<(bits-int(signed))),
+                              ('low',-(1<<(bits-1))-1 if signed else -1)]:
+            # No ID references the invalid entry. The entire dictionary must
+            # satisfy the logical type before publication, including unused data.
+            for codec in (0,1):
+                for version in (1,2):
+                    name=f'unreferenced-narrow-{dtype}-{label}-v{version}-c{codec}'
+                    pages=[dictionary([1,invalid],dtype,codec),
+                           data([0]*3,1,version,codec,dtype=dtype)]
+                    malformed[name]=(pages,3,dtype,codec)
+    for codec in (0,1):
+        for length in (3,5):
+            # Both truncated and trailing entry bytes have self-consistent
+            # page/footer framing; cardinality still requires exactly four.
+            pages=[dictionary([1],'int32',codec,body=b'\0'*length),
+                   data([0]*3,0,codec=codec)]
+            malformed[f'dictionary-bytes-{length}-c{codec}']=(pages,3,'int32',codec)
     for name,case in malformed.items():
         pages,rows=case[:2];dtype=case[2] if len(case)>2 else 'int32'
-        path=OUT/f'bad-{name}.parquet';path.write_bytes(fixture(dtype,[(pages,rows)]))
+        codec=case[3] if len(case)>3 else 0
+        path=OUT/f'bad-{name}.parquet';path.write_bytes(fixture(dtype,[(pages,rows)],codec=codec))
         result=probe(path,dtype);assert result.returncode!=0,(name,result.stdout,result.stderr)
+        if name.startswith('unreferenced-narrow-'):
+            assert 'outside declared narrow range' in result.stdout+result.stderr,(name,result.stdout,result.stderr)
+        if name.startswith('dictionary-bytes-'):
+            assert 'Dictionary byte length disagrees' in result.stdout+result.stderr,(name,result.stdout,result.stderr)
         assert not result.stdout.splitlines() or result.stdout.splitlines()[0]!='3 0',(name,'partial results')
         RESULTS.append({'file':path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'rejected':True,'oracles':{}})
+    for version in (1,2):
+        for codec in (0,1):
+            # A successful first group must not publish its dictionary into the
+            # next group, even when all IDs would fit the previous dictionary.
+            groups=[([dictionary([42],'int32',codec),data([0]*3,0,version,codec)],3),
+                    ([data([0]*3,0,version,codec)],3)]
+            path=OUT/f'bad-dictionary-second-group-v{version}-c{codec}.parquet'
+            path.write_bytes(fixture('int32',groups,codec=codec))
+            result=probe(path,'int32')
+            assert result.returncode!=0 and 'has no dictionary' in result.stdout+result.stderr,(path,result.stdout,result.stderr)
+            RESULTS.append({'file':path.name,'sha256':hashlib.sha256(path.read_bytes()).hexdigest(),'rejected':True,'oracles':{}})
 
 
 def truncated_snappy():
