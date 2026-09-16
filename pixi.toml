@@ -7,6 +7,9 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+test-binary = "mojo run -D ASSERT=all -I src tests/test_binary_column.mojo && mojo run -D ASSERT=all -I src tests/test_boolean_column.mojo && mojo run -D ASSERT=all -I src tests/test_binary_values.mojo"
+test-binary-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_binary_column.mojo -o build/test-binary-column && build/test-binary-column && mojo build -O3 -D ASSERT=all -I src tests/test_boolean_column.mojo -o build/test-boolean-column && build/test-boolean-column && mojo build -O3 -D ASSERT=all -I src tests/test_binary_values.mojo -o build/test-binary-values && build/test-binary-values"
+
 test-hybrid = "mojo run -D ASSERT=all -I src tests/test_hybrid.mojo"
 test-hybrid-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src tests/test_hybrid.mojo -o build/test-hybrid && build/test-hybrid"
 test-numeric-write = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo"
