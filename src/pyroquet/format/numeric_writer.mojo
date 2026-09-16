@@ -67,6 +67,7 @@ struct _WrittenField(Copyable, Movable):
     var signed: Bool
     var nullable: Bool
     var codec: Int
+    var fixed_width: Int
 
 
 def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
@@ -77,6 +78,8 @@ def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
     var signed = field.signed
     writer.begin_struct()
     _i32(writer, 1, physical)
+    if physical == 7:
+        _i32(writer, 2, field.fixed_width)
     _i32(writer, 3, 1 if nullable else 0)
     _string(writer, 4, name)
     if integer_width != 0:
@@ -193,7 +196,7 @@ def _numeric_footer(
     var fields = List[_WrittenField]()
     fields.append(
         _WrittenField(
-            name.copy(), physical, integer_width, signed, nullable, codec
+            name.copy(), physical, integer_width, signed, nullable, codec, 0
         )
     )
     return _table_footer(fields, rows, groups, len(groups), max_bytes)

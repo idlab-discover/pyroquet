@@ -7,6 +7,16 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = "from pyroquet.binary_column import BinaryColumn, BinaryBuilder\n"
 CASES = {
+    "table_escape": (False, """
+from pyroquet import Schema, SchemaNode, Column, Table
+
+def escape() raises -> Span[UInt8, ImmStaticOrigin]:
+    var t = Table(Schema([SchemaNode("root", SchemaNode.GROUP, -1), SchemaNode("raw", SchemaNode.BINARY, 0)]), [Column("raw", BinaryColumn([0, 1], [255]))], 1)
+    return t.column(0).binary().value(0)
+
+def main() raises:
+    print(escape()[0])
+"""),
     "valid": (True, """
 def main() raises:
     var builder = BinaryBuilder()
@@ -48,7 +58,7 @@ def main():
             path = Path(directory) / (name + ".mojo")
             path.write_text(PRELUDE + source)
             result = subprocess.run(
-                ["pixi", "run", "mojo", "build", "-I", "src", str(path),
+                ["pixi", "run", "mojo", "build", "-I", "src", "-I", "../NuMojo", str(path),
                  "-o", str(Path(directory) / name)],
                 cwd=ROOT, capture_output=True, text=True,
             )

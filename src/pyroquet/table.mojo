@@ -1,4 +1,4 @@
-"""Owned mixed-numeric tables and legacy chunked UInt32 construction helpers.
+"""Owned mixed scalar tables and legacy chunked UInt32 construction helpers.
 
 Numeric tables borrow typed storage immutably. Validity is packed LSB-first;
 absent bitmaps mean all values are present. Schema owns field nullability.
@@ -7,6 +7,8 @@ absent bitmaps mean all values are present. Schema owns field nullability.
 from std.utils import Variant
 from numojo.routines.creation import empty
 from .numeric_column import NumericColumn
+from .binary_column import BinaryColumn
+from .boolean_column import BooleanColumn
 from .schema import Schema, SchemaNode
 from .storage import FrozenBuffer
 
@@ -96,7 +98,7 @@ struct UInt32Column(Copyable, Movable, Sized):
 
 
 struct Column(Movable):
-    """Own one numeric column and expose checked immutable typed borrows."""
+    """Own one scalar column and expose checked immutable typed borrows."""
 
     var _data: Variant[
         NumericColumn[DType.int8],
@@ -109,29 +111,73 @@ struct Column(Movable):
         NumericColumn[DType.uint64],
         NumericColumn[DType.float32],
         NumericColumn[DType.float64],
+        BooleanColumn,
+        BinaryColumn,
     ]
     var _dtype: DType
+    var _kind: Int
     var _name: String
     var _size: Int
     var _null_count: Int
 
     def __init__[dtype: DType](out self, var column: NumericColumn[dtype]):
         self._dtype = dtype
+        self._kind = SchemaNode.numeric_kind[dtype]()
         self._name = column.name()
         self._size = column.size()
         self._null_count = column.null_count()
         self._data = column^
+
+    def __init__(out self, var name: String, var column: BooleanColumn):
+        self._dtype = DType.bool
+        self._kind = SchemaNode.BOOLEAN
+        self._name = name^
+        self._size = len(column)
+        self._null_count = column.null_count()
+        self._data = column^
+
+    def __init__(out self, var name: String, var column: BinaryColumn):
+        self._dtype = DType.uint8
+        self._kind = (
+            SchemaNode.FIXED_BINARY if column.fixed_width() else SchemaNode.BINARY
+        )
+        self._name = name^
+        self._size = len(column)
+        self._null_count = column.null_count()
+        self._data = column^
+
+    def kind(self) -> Int:
+        return self._kind
+
+    def boolean(
+        self,
+    ) raises -> ref[origin_of(self._data[BooleanColumn])] BooleanColumn:
+        if self._kind != SchemaNode.BOOLEAN:
+            raise Error("Column is not Boolean")
+        return self._data[BooleanColumn]
+
+    def binary(
+        self,
+    ) raises -> ref[origin_of(self._data[BinaryColumn])] BinaryColumn:
+        if (
+            self._kind != SchemaNode.BINARY
+            and self._kind != SchemaNode.FIXED_BINARY
+        ):
+            raise Error("Column is not binary")
+        return self._data[BinaryColumn]
 
     def numeric[
         dtype: DType
     ](self) raises -> ref[
         origin_of(self._data[NumericColumn[dtype]])
     ] NumericColumn[dtype]:
-        if self._dtype != dtype:
+        if self._kind != SchemaNode.numeric_kind[dtype]():
             raise Error("Column dtype does not match requested borrow")
         return self._data[NumericColumn[dtype]]
 
-    def dtype(self) -> DType:
+    def dtype(self) raises -> DType:
+        if self._kind >= SchemaNode.BOOLEAN:
+            raise Error("Non-numeric column has no numeric dtype")
         return self._dtype
 
     def name(self) -> String:
@@ -149,7 +195,7 @@ struct Column(Movable):
 
 
 struct Table(Movable):
-    """Own a validated flat mixed-numeric table with immutable typed borrowing.
+    """Own a validated flat mixed scalar table with immutable typed borrowing.
 
     Schema supplies names, order and nullability. Explicit row counts preserve
     zero-column projection shape. Storage moves into the table without copies.
@@ -172,9 +218,14 @@ struct Table(Movable):
         for i in range(len(columns)):
             var field = schema.node(i + 1)
             if field.parent() != 0 or field.kind() == SchemaNode.GROUP:
-                raise Error("Only flat numeric materialization is implemented")
-            if field.dtype() != columns[i].dtype():
+                raise Error("Only flat primitive materialization is implemented")
+            if field.kind() != columns[i].kind():
                 raise Error("Column dtype disagrees with schema")
+            if (
+                field.kind() == SchemaNode.FIXED_BINARY
+                and field.fixed_width() != columns[i].binary().fixed_width()
+            ):
+                raise Error("Fixed binary storage width disagrees with schema")
             if field.name() != columns[i].name():
                 raise Error("Column name disagrees with schema")
             if columns[i].size() != num_rows:

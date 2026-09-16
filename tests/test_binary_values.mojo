@@ -94,5 +94,13 @@ def test_boolean_rle_prefix_and_packing() raises:
         _ = decode_boolean_values([], 0, encoding=8)
 
 
+def test_boolean_long_run_and_empty_rle() raises:
+    var column = decode_boolean_values([4, 0, 0, 0, 130, 128, 1, 1], 8193, encoding=3)
+    for i in range(8193):
+        assert_equal(column.value(i).value(), True)
+    var empty = decode_boolean_values([0, 0, 0, 0], 0, encoding=3)
+    assert_equal(len(empty), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

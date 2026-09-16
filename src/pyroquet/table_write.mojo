@@ -1,6 +1,8 @@
-"""Transactional flat mixed-numeric writing with independent column pages."""
+"""Transactional flat mixed scalar writing with independent column pages."""
 from std.sys import size_of
 from .table import Table
+from .schema import SchemaNode
+from .binary_write import _write_binary_chunk
 from .io import NewFile
 from .numojo_write import NumericWriteOptions, _write_numeric_chunk, _append_u32
 from .format.numeric_writer import _WrittenField, _WrittenGroup, _table_footer
@@ -108,7 +110,7 @@ def save_table(
             raise Error("Output column name must be nonempty")
         comptime for t in range(10):
             comptime dtype = types[t]
-            if table.column(c).dtype() == dtype:
+            if table.column(c).kind() == SchemaNode.numeric_kind[dtype]():
                 comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
                 numeric_options.validate(
                     width, rows, table.column(c).null_count()
@@ -128,8 +130,25 @@ def save_table(
                         dtype.is_signed(),
                         node.nullable(),
                         setting.codec,
+                        0,
                     )
                 )
+        if node.kind() >= SchemaNode.BOOLEAN:
+            numeric_options.validate(0, rows, table.column(c).null_count())
+            var physical = 0 if node.kind() == SchemaNode.BOOLEAN else (
+                7 if node.kind() == SchemaNode.FIXED_BINARY else 6
+            )
+            fields.append(
+                _WrittenField(
+                    name.copy(),
+                    physical,
+                    0,
+                    False,
+                    node.nullable(),
+                    setting.codec,
+                    node.fixed_width(),
+                )
+            )
         configured.append(numeric_options)
     var chunks = List[_WrittenGroup](capacity=group_count * columns)
     var file = NewFile(path)
@@ -140,9 +159,21 @@ def save_table(
     while start < rows:
         var count = min(options.row_group_rows, rows - start)
         for c in range(columns):
+            if table.column(c).kind() >= SchemaNode.BOOLEAN:
+                chunks.append(
+                    _write_binary_chunk(
+                        file,
+                        table.column(c),
+                        start,
+                        count,
+                        configured[c],
+                        offset,
+                    )
+                )
+                continue
             comptime for t in range(10):
                 comptime dtype = types[t]
-                if table.column(c).dtype() == dtype:
+                if table.column(c).kind() == SchemaNode.numeric_kind[dtype]():
                     chunks.append(
                         _write_numeric_chunk[dtype](
                             file,

@@ -7,8 +7,8 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
-test-binary = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_column.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_boolean_column.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_values.mojo"
-test-binary-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_column.mojo -o build/test-binary-column && build/test-binary-column && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_boolean_column.mojo -o build/test-boolean-column && build/test-boolean-column && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_values.mojo -o build/test-binary-values && build/test-binary-values"
+test-binary = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_column.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_boolean_column.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_values.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_io.mojo"
+test-binary-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_column.mojo -o build/test-binary-column && build/test-binary-column && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_boolean_column.mojo -o build/test-boolean-column && build/test-boolean-column && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_values.mojo -o build/test-binary-values && build/test-binary-values && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_io.mojo -o build/test-binary-io && build/test-binary-io"
 test-hybrid = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_hybrid.mojo"
 test-hybrid-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_hybrid.mojo -o build/test-hybrid && build/test-hybrid"
 test-table-write = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_table_write.mojo"

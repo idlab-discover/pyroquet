@@ -19,11 +19,15 @@ struct SchemaNode(Copyable, Movable):
     comptime UINT64 = 8
     comptime FLOAT32 = 9
     comptime FLOAT64 = 10
+    comptime BOOLEAN = 11
+    comptime BINARY = 12
+    comptime FIXED_BINARY = 13
 
     var _name: String
     var _kind: Int
     var _parent: Int
     var _nullable: Bool
+    var _fixed_width: Int
 
     def __init__(
         out self,
@@ -31,11 +35,13 @@ struct SchemaNode(Copyable, Movable):
         kind: Int,
         parent: Int,
         nullable: Bool = False,
+        fixed_width: Int = 0,
     ):
         self._name = name^
         self._kind = kind
         self._parent = parent
         self._nullable = nullable
+        self._fixed_width = fixed_width
 
     def name(self) -> String:
         return self._name.copy()
@@ -93,6 +99,9 @@ struct SchemaNode(Copyable, Movable):
     def parent(self) -> Int:
         return self._parent
 
+    def fixed_width(self) -> Int:
+        return self._fixed_width
+
     def nullable(self) -> Bool:
         return self._nullable
 
@@ -126,9 +135,19 @@ struct Schema(Copyable, Movable, Sized):
                 raise Error("Primitive schema node cannot have children")
             if (
                 nodes[i].kind() < SchemaNode.GROUP
-                or nodes[i].kind() > SchemaNode.FLOAT64
+                or nodes[i].kind() > SchemaNode.FIXED_BINARY
             ):
                 raise Error("Unsupported schema type")
+            if nodes[i].kind() == SchemaNode.FIXED_BINARY:
+                if (
+                    nodes[i].fixed_width() < 1
+                    or nodes[i].fixed_width() > 2147483647
+                ):
+                    raise Error(
+                        "Fixed binary schema requires a positive i32 width"
+                    )
+            elif nodes[i].fixed_width() != 0:
+                raise Error("Only fixed binary schema may specify byte width")
             var depth = depths[parent] + 1
             if depth > max_depth:
                 raise Error("Schema nesting exceeds depth limit")

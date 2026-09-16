@@ -1,4 +1,4 @@
-"""Flat numeric table loading with one validated footer and ordered projection.
+"""Flat scalar table loading with one validated footer and ordered projection.
 
 All schema/chunk structure and local byte ranges are validated, including those
 of unselected fields. Only selected columns have their pages and values decoded;
@@ -11,6 +11,7 @@ from .format.pages import PageLimits
 from .numojo_io import _matches_numeric, _load_numeric_from_file
 from .schema import Schema, SchemaNode
 from .table import Table, Column
+from .binary_io import _binary_kind, _binary_overhead, _load_binary_from_file
 from std.sys import size_of
 
 
@@ -76,7 +77,7 @@ def load_table(
         DType.float64,
     )
     var budget = max_output_bytes
-    # Preflight the complete retained output before allocating any column.
+    # Preflight fixed output storage; charge variable arenas as they materialize.
     for index in indices:
         var matched = False
         comptime for t in range(len(types)):
@@ -98,13 +99,38 @@ def load_table(
                             "Table validity exceeds aggregate output budget"
                         )
                     budget -= bitmap
+        var kind = _binary_kind(metadata.schema[index])
+        if kind >= 0:
+            budget -= _binary_overhead(Int(metadata.num_rows), kind, budget)
+            matched = True
         if not matched:
-            raise Error("Selected field is not a supported flat numeric column")
+            raise Error("Selected field is not a supported flat column")
     var nodes = List[SchemaNode]()
     nodes.append(SchemaNode("schema", SchemaNode.GROUP, -1))
     var columns = List[Column]()
     for i in range(len(indices)):
         var index = indices[i]
+        var kind = _binary_kind(metadata.schema[index])
+        if kind >= 0:
+            var width = (
+                metadata.schema[index].type_length if kind
+                == SchemaNode.FIXED_BINARY else 0
+            )
+            nodes.append(
+                SchemaNode(
+                    names[i], kind, 0, metadata.schema[index].nullable(), width
+                )
+            )
+            var overhead = _binary_overhead(
+                Int(metadata.num_rows), kind, max_output_bytes
+            )
+            var column = _load_binary_from_file(
+                file, metadata, index, leaves[i], budget + overhead, page_limits
+            )
+            if kind != SchemaNode.BOOLEAN:
+                budget -= column.binary().byte_size()
+            columns.append(column^)
+            continue
         comptime for t in range(len(types)):
             comptime dtype = types[t]
             if _matches_numeric[dtype](metadata.schema[index]):
