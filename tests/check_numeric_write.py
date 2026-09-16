@@ -15,6 +15,7 @@ import duckdb
 import fastparquet
 from fastparquet import core, converted_types, encoding
 from fastparquet.cencoding import ThriftObject
+from fastparquet.compression import decompress_data
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -26,7 +27,9 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'build/numeric-write-checks'
 BINARY = OUT / 'roundtrip'
 PAGE_VERSION = 1
+CODEC = 0
 LIMITATIONS = []
+WIRE_COUNTS = {}
 DUCK_TYPES = dict(zip(TYPES, ['TINYINT', 'UTINYINT', 'SMALLINT', 'USMALLINT',
                             'INTEGER', 'UINTEGER', 'BIGINT', 'UBIGINT', 'FLOAT', 'DOUBLE']))
 
@@ -48,11 +51,12 @@ def arrow_values(array, dtype):
 
 def probe(source, target, dtype, nullable=True, page_rows=17, row_group_rows=61,
           max_page_bytes=1048576, max_metadata_bytes=67108864, max_row_groups=100000,
-          name='value', page_version=None):
+          name='value', page_version=None, codec=None):
     return subprocess.run([str(BINARY), dtype, str(source), str(target), name,
                            str(int(nullable)), str(page_rows), str(row_group_rows),
                            str(max_page_bytes), str(max_metadata_bytes), str(max_row_groups),
-                           str(PAGE_VERSION if page_version is None else page_version)],
+                           str(PAGE_VERSION if page_version is None else page_version),
+                           str(CODEC if codec is None else codec)],
                           capture_output=True, text=True)
 
 
@@ -87,20 +91,24 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
             assert 0 < group.num_rows <= row_group_rows
         assert len(group.columns) == 1
         metadata = group.columns[0].meta_data
-        assert metadata.codec == 0 and metadata.type == physical
+        assert metadata.codec == CODEC and metadata.type == physical
         assert metadata.num_values == group.num_rows
         if emitted:
             assert set(metadata.encodings) <= {0, 3} and 0 in metadata.encodings
             assert metadata.data_page_offset == previous_end
-            assert metadata.total_compressed_size == metadata.total_uncompressed_size
+            if CODEC == 0:
+                assert metadata.total_compressed_size == metadata.total_uncompressed_size
             assert metadata.statistics.null_count == expected[offset:offset + group.num_rows].count(None)
         stream = encoding.NumpyIO(raw)
         stream.seek(metadata.data_page_offset)
         group_start = stream.tell()
         group_rows = 0
+        uncompressed_size = 0
         while group_rows < group.num_rows:
+            header_start = stream.tell()
             header = ThriftObject.from_buffer(stream, 'PageHeader')
-            assert header.type == (3 if emitted and PAGE_VERSION == 2 else 0), (path, header.type, PAGE_VERSION)
+            source_version = PAGE_VERSION if CODEC else 1
+            assert header.type == (3 if (PAGE_VERSION if emitted else source_version) == 2 else 0), (path, header.type, PAGE_VERSION)
             dh = header.data_page_header_v2 if header.type == 3 else header.data_page_header
             assert dh.encoding == 0
             if header.type == 0:
@@ -109,11 +117,23 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
                 assert 0 < dh.num_values <= page_rows
             body_start = stream.tell()
             body = raw[body_start:body_start + header.compressed_page_size]
+            assert len(body) == header.compressed_page_size
+            uncompressed_size += body_start - header_start + header.uncompressed_page_size
+            plain_body = body
+            if emitted:
+                key = ('v2-compressed-values' if dh.is_compressed else 'v2-raw-values') if header.type == 3 else ('v1-snappy' if CODEC else 'v1-raw')
+                WIRE_COUNTS[key] = WIRE_COUNTS.get(key, 0) + 1
             if header.type == 3:
                 assert dh.num_rows == dh.num_values
                 assert dh.num_nulls == expected[offset:offset + dh.num_values].count(None)
                 assert dh.repetition_levels_byte_length == 0
-                assert dh.is_compressed is False
+                if CODEC == 0:
+                    assert dh.is_compressed is False
+                if dh.is_compressed and CODEC:
+                    levels = dh.definition_levels_byte_length
+                    plain_body = body[:levels] + bytes(decompress_data(
+                        np.frombuffer(body[levels:], dtype="uint8"),
+                        header.uncompressed_page_size - levels, metadata.codec))
                 levels_size = dh.definition_levels_byte_length
                 assert 0 <= levels_size <= len(body)
                 assert (levels_size > 0) == nullable
@@ -148,6 +168,9 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
                 else:
                     vals = assign[np.array(valid)]
             else:
+                if CODEC:
+                    plain_body = bytes(decompress_data(
+                        np.frombuffer(body, dtype="uint8"), header.uncompressed_page_size, metadata.codec))
                 defs, reps, vals = core.read_data_page(stream, pf.schema, header, metadata)
                 assert reps is None
                 valid = [True] * dh.num_values if defs is None else [int(v) == 1 for v in defs]
@@ -161,16 +184,16 @@ def fastparquet_pages(path, dtype, expected, *, emitted=False, nullable=True,
             assert got == [v for v in wanted if v is not None], (path, offset, got, wanted)
             if emitted:
                 levels_size = (dh.definition_levels_byte_length if header.type == 3 else
-                               4 + int.from_bytes(body[:4], 'little') if nullable else 0)
-                assert body[levels_size:] == expected_plain(wanted, dtype), (path, offset, 'PLAIN bytes/padding')
-                assert header.compressed_page_size == header.uncompressed_page_size == len(body)
+                               4 + int.from_bytes(plain_body[:4], 'little') if nullable else 0)
+                assert plain_body[levels_size:] == expected_plain(wanted, dtype), (path, offset, 'PLAIN bytes/padding')
+                assert header.uncompressed_page_size == len(plain_body)
             group_rows += dh.num_values
             offset += dh.num_values
             pages += 1
         assert group_rows == group.num_rows
         if emitted:
             assert stream.tell() - group_start == metadata.total_compressed_size
-            assert group.total_byte_size == metadata.total_uncompressed_size
+            assert group.total_byte_size == metadata.total_uncompressed_size == uncompressed_size
         previous_end = stream.tell()
     assert offset == len(expected)
     if emitted:
@@ -267,8 +290,8 @@ def run_version():
             target = OUT / f'{dtype}-{label}-native.parquet'
             schema = pa.schema([pa.field('value', typ, nullable=nullable)])
             table = pa.Table.from_arrays([pa.array(values, type=typ)], schema=schema)
-            pq.write_table(table, source, compression='NONE', use_dictionary=False,
-                           data_page_version='1.0', row_group_size=101, write_statistics=False)
+            pq.write_table(table, source, compression='SNAPPY' if CODEC else 'NONE', use_dictionary=False,
+                           data_page_version=f'{PAGE_VERSION if CODEC else 1}.0', row_group_size=101, write_statistics=False)
             expected = arrow_values(table['value'], dtype)
             compare(source, dtype, expected, db, nullable=nullable)
             target.unlink(missing_ok=True)
@@ -290,7 +313,9 @@ def run_version():
             array = pa.Array.from_buffers(typ, len(bits), [None, pa.py_buffer(
                 b''.join(v.to_bytes(width // 8, 'little') for v in bits))])
             table = pa.Table.from_arrays([array], schema=pa.schema([pa.field('value', typ, nullable=False)]))
-            pq.write_table(table, source, compression='NONE', use_dictionary=False, write_statistics=False)
+            pq.write_table(table, source, compression='SNAPPY' if CODEC else 'NONE',
+                           data_page_version=f'{PAGE_VERSION if CODEC else 1}.0',
+                           use_dictionary=False, write_statistics=False)
             compare(source, dtype, bits, db, nullable=False)
             target.unlink(missing_ok=True)
             result = probe(source, target, dtype, nullable=False, page_rows=1)
@@ -301,6 +326,7 @@ def run_version():
     source = OUT / 'int32-mixed-source.parquet'
     for label, options in [
         ('null-required', {'nullable': False}),
+        ('codec-negative', {'codec': -1}), ('codec-unsupported', {'codec': 2}),
         ('version-zero', {'page_version': 0}), ('version-three', {'page_version': 3}),
         ('version-negative', {'page_version': -1}),
         ('zero-page', {'page_rows': 0}), ('negative-page', {'page_rows': -1}),
@@ -318,9 +344,15 @@ def run_version():
         assert set(OUT.iterdir()) == before, (label, 'temporary file leak')
         rejected += 1
     # Exercise exact page/footer limits and deliberate output nullability changes.
+    raw_page_bound = 80 if PAGE_VERSION == 1 else 76
+    raw_small_group_bound = 22 if PAGE_VERSION == 1 else 18
+    # V1 compresses the entire body even when Snappy expands it. Preserve the
+    # exact raw-bound tests for NONE; allow the encoder's worst case for Snappy.
+    page_bound = 32 + raw_page_bound + raw_page_bound // 6 if CODEC and PAGE_VERSION == 1 else raw_page_bound
+    small_group_bound = 32 + raw_small_group_bound + raw_small_group_bound // 6 if CODEC and PAGE_VERSION == 1 else raw_small_group_bound
     for label, source_label, options in [
-        ('exact-page-bound', 'mixed', {'max_page_bytes': 80 if PAGE_VERSION == 1 else 76}),
-        ('group-smaller-than-page', 'mixed', {'row_group_rows': 3, 'max_page_bytes': 22 if PAGE_VERSION == 1 else 18}),
+        ('snappy-page-bound' if CODEC and PAGE_VERSION == 1 else 'exact-page-bound', 'mixed', {'max_page_bytes': page_bound}),
+        ('group-smaller-than-page', 'mixed', {'row_group_rows': 3, 'max_page_bytes': small_group_bound}),
         ('required-to-optional', 'required', {'nullable': True}),
         ('optional-to-required', 'nullable-valid', {'nullable': False}),
         ('zero-groups-empty', 'empty', {'max_row_groups': 0}),
@@ -361,10 +393,14 @@ def run_version():
     assert not target.exists() and set(OUT.iterdir()) == before
     rejected += 1
     db.close()
+    if CODEC and PAGE_VERSION == 2:
+        assert WIRE_COUNTS.get('v2-compressed-values', 0) > 0
+        assert WIRE_COUNTS.get('v2-raw-values', 0) > 0
     result = {'native_files': files, 'values_and_nulls': rows, 'native_pages': pages,
               'rejections': rejected, 'oracles': ['PyArrow', 'DuckDB', 'Fastparquet'],
               'float_bits': 'Native, Arrow buffers and Fastparquet page buffers preserve all tested bits; DuckDB and pandas check NaN semantics and all non-NaN bits.',
-              'page_version': PAGE_VERSION,
+              'page_version': PAGE_VERSION, 'codec': 'SNAPPY' if CODEC else 'NONE',
+              'wire_pages': WIRE_COUNTS.copy(),
               'unsupported_oracle_comparisons': len(LIMITATIONS),
               'oracle_limitations': LIMITATIONS.copy()}
     (OUT / 'results.json').write_text(json.dumps(result, indent=2) + '\n')
@@ -372,17 +408,20 @@ def run_version():
 
 
 def main():
-    global OUT, PAGE_VERSION
+    global OUT, PAGE_VERSION, CODEC
     base = OUT
     base.mkdir(parents=True, exist_ok=True)
     subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
                     '-I', 'src', '-I', '../NuMojo', 'tests/roundtrip_numeric.mojo',
                     '-o', str(BINARY)], cwd=ROOT, check=True)
-    for version in (1, 2):
-        PAGE_VERSION = version
-        OUT = base / f'v{version}'
-        LIMITATIONS.clear()
-        run_version()
+    for codec in (0, 1):
+        CODEC = codec
+        for version in (1, 2):
+            PAGE_VERSION = version
+            OUT = base / (f'snappy-v{version}' if codec else f'v{version}')
+            LIMITATIONS.clear()
+            WIRE_COUNTS.clear()
+            run_version()
 
 
 if __name__ == '__main__':

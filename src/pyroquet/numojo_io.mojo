@@ -1,4 +1,4 @@
-"""Direct-to-NuMojo flat numeric reading (uncompressed PLAIN V1/V2 only).
+"""Direct-to-NuMojo flat numeric reading (uncompressed/Snappy PLAIN V1/V2).
 
 NuMojo owns the sole decoded value allocation. Parquet contributes a packed
 validity bitmap; null slots are initialized to zero, not a sentinel. Numeric
@@ -12,6 +12,7 @@ from compact_protocol import CompactLimits
 from .format.footer import _read_footer_bytes_from_file
 from .format.metadata import SchemaElement, parse_metadata, validate_file_ranges
 from .format.pages import PageLimits, PageHeader, _ColumnPages
+from .format.codecs import decode_snappy
 
 
 struct NumericColumn[dtype: DType](Movable):
@@ -304,6 +305,35 @@ def _decode_plain_page[
     return nulls
 
 
+def _numeric_page_body(
+    var bytes: List[UInt8], h: PageHeader, codec: Int
+) raises -> List[UInt8]:
+    """Decode one bounded body, preserving V2's uncompressed level prefix."""
+    if codec != 0 and codec != 1:
+        raise Error("Only UNCOMPRESSED and SNAPPY columns are supported")
+    if len(bytes) != h.compressed_page_size:
+        raise Error("Page body length disagrees with header")
+    if codec == 0 or (h.page_type == 3 and not h.is_compressed):
+        if len(bytes) != h.uncompressed_page_size:
+            raise Error("Uncompressed page body sizes disagree")
+        return bytes^
+    if h.page_type == 0:
+        return decode_snappy(bytes, h.uncompressed_page_size)
+    if h.page_type != 3 or h.repetition_levels_byte_length != 0:
+        raise Error("Expected a flat numeric data page")
+    var levels = h.definition_levels_byte_length
+    if levels < 0 or levels > len(bytes) or levels > h.uncompressed_page_size:
+        raise Error("V2 levels exceed page body")
+    var values = decode_snappy(bytes, h.uncompressed_page_size - levels, levels)
+    var body = List[UInt8]()
+    body.reserve(h.uncompressed_page_size)
+    for i in range(levels):
+        body.append(bytes[i])
+    for value in values:
+        body.append(value)
+    return body^
+
+
 def load_numeric[
     dtype: DType
 ](
@@ -316,7 +346,7 @@ def load_numeric[
     """Load a named top-level numeric column across all row groups into NuMojo.
 
     One decoded allocation; bounded page-body buffers. The output budget covers
-    values plus validity, not metadata or page buffers. Compressed, dictionary,
+    values plus validity, not metadata or page buffers. Non-Snappy codecs, dictionary,
     nested, encrypted and mismatched numeric columns are explicitly unsupported.
     CRC verification is not yet implemented. Never returns partially filled data.
     """
@@ -360,8 +390,11 @@ def load_numeric[
     if bitmap_bytes > max_output_bytes - rows * size_of[Scalar[dtype]]():
         raise Error("Column validity exceeds output budget")
     for group in metadata.row_groups:
-        if group.columns[column_index].codec != 0:
-            raise Error("Only UNCOMPRESSED columns are supported")
+        if (
+            group.columns[column_index].codec != 0
+            and group.columns[column_index].codec != 1
+        ):
+            raise Error("Only UNCOMPRESSED and SNAPPY columns are supported")
         if group.columns[column_index].dictionary_page_offset != -1:
             raise Error("Dictionary columns are not supported yet")
     var values = empty[dtype]([rows])
@@ -387,6 +420,9 @@ def load_numeric[
             var bytes = file.read_bytes(page.header.compressed_page_size)
             if len(bytes) != page.header.compressed_page_size:
                 raise Error("Short data-page payload read")
+            bytes = _numeric_page_body(
+                bytes^, page.header, group.columns[column_index].codec
+            )
             null_count += _decode_plain_page[dtype](
                 bytes, page.header, nullable, values, validity, output
             )

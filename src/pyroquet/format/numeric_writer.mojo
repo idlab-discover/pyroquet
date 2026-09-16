@@ -6,6 +6,7 @@ from compact_protocol import CompactWriter, CompactType, CompactLimits
 struct _WrittenGroup(ImplicitlyCopyable):
     var offset: Int64
     var size: Int64
+    var uncompressed_size: Int64
     var rows: Int64
     var nulls: Int64
 
@@ -31,12 +32,14 @@ def _plain_header(
     page_version: Int = 1,
     nulls: Int = 0,
     definition_bytes: Int = 0,
+    compressed_size: Int = -1,
+    is_compressed: Bool = False,
 ) raises -> List[UInt8]:
     var writer = CompactWriter(CompactLimits(max_bytes=128))
     writer.begin_struct()
     _i32(writer, 1, 0 if page_version == 1 else 3)  # DATA_PAGE / DATA_PAGE_V2
     _i32(writer, 2, body_size)
-    _i32(writer, 3, body_size)
+    _i32(writer, 3, body_size if compressed_size < 0 else compressed_size)
     writer.write_field(5 if page_version == 1 else 8, CompactType.STRUCT)
     writer.begin_struct()
     _i32(writer, 1, rows)
@@ -50,7 +53,7 @@ def _plain_header(
         _i32(writer, 4, 0)  # PLAIN
         _i32(writer, 5, definition_bytes)
         _i32(writer, 6, 0)  # No repetition-level stream
-        writer.write_bool_field(7, False)  # Values are explicitly uncompressed
+        writer.write_bool_field(7, is_compressed)
     writer.end_struct()
     writer.end_struct()
     return writer^.finish()
@@ -65,6 +68,7 @@ def _numeric_footer(
     rows: Int,
     groups: List[_WrittenGroup],
     max_bytes: Int,
+    codec: Int = 0,
 ) raises -> List[UInt8]:
     var writer = CompactWriter(CompactLimits(max_bytes=max_bytes))
     writer.begin_struct()
@@ -116,9 +120,9 @@ def _numeric_footer(
         writer.write_field(3, CompactType.LIST)
         writer.write_collection(CompactType.BINARY, 1)
         writer.write_string(name)
-        _i32(writer, 4, 0)  # UNCOMPRESSED
+        _i32(writer, 4, codec)
         _i64(writer, 5, group.rows)
-        _i64(writer, 6, group.size)
+        _i64(writer, 6, group.uncompressed_size)
         _i64(writer, 7, group.size)
         _i64(writer, 9, group.offset)
         writer.write_field(
@@ -129,7 +133,7 @@ def _numeric_footer(
         writer.end_struct()
         writer.end_struct()
         writer.end_struct()
-        _i64(writer, 2, group.size)
+        _i64(writer, 2, group.uncompressed_size)
         _i64(writer, 3, group.rows)
         _i64(writer, 5, group.offset)
         _i64(writer, 6, group.size)

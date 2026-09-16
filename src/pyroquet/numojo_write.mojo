@@ -1,12 +1,20 @@
-"""Write a borrowed numeric column as bounded, uncompressed PLAIN V1/V2 pages."""
+"""Write a borrowed numeric column as bounded PLAIN V1/V2 pages."""
 from std.memory import bitcast
 from std.sys import size_of
 from .io import NewFile
 from .numojo_io import NumericColumn, _check_numeric
 from .format.numeric_writer import _WrittenGroup, _plain_header, _numeric_footer
+from .format.codecs import encode_snappy, snappy_max_compressed_length
 
 
 struct NumericWriteOptions(ImplicitlyCopyable):
+    """Codec 0 is uncompressed (default); codec 1 uses native Snappy.
+
+    max_page_bytes bounds each raw and stored page body separately. Snappy
+    staging additionally uses a bounded encoded buffer and encoder workspace.
+    """
+
+    var codec: Int
     var page_version: Int
     var nullable: Bool
     var page_rows: Int
@@ -24,7 +32,9 @@ struct NumericWriteOptions(ImplicitlyCopyable):
         max_metadata_bytes: Int = 67108864,
         max_row_groups: Int = 100000,
         page_version: Int = 1,
+        codec: Int = 0,
     ):
+        self.codec = codec
         self.page_version = page_version
         self.nullable = nullable
         self.page_rows = page_rows
@@ -36,6 +46,7 @@ struct NumericWriteOptions(ImplicitlyCopyable):
     def validate(self, physical_bytes: Int, rows: Int, nulls: Int) raises:
         if (
             (self.page_version != 1 and self.page_version != 2)
+            or (self.codec != 0 and self.codec != 1)
             or self.page_rows < 1
             or self.page_rows > 2147483647
             or self.row_group_rows < 1
@@ -182,6 +193,7 @@ def save_numeric[
         var group_offset = offset
         var written = 0
         var nulls = 0
+        var uncompressed_size = Int64(0)
         while written < count:
             var page_rows = min(options.page_rows, count - written)
             var page_nulls = 0
@@ -196,23 +208,63 @@ def save_numeric[
             nulls += page_nulls
             # Present values occupy physical-width slots in both page formats.
             var level_bytes = len(bytes) - (page_rows - page_nulls) * width
+            var body_size = len(bytes)
+            var compressed = List[UInt8]()
+            var is_compressed = False
+            if options.codec == 1:
+                if options.page_version == 1:
+                    compressed = encode_snappy(bytes, options.max_page_bytes)
+                    is_compressed = True
+                else:
+                    var values_size = body_size - level_bytes
+                    # Permit expansion within a bounded temporary buffer, then
+                    # retain raw values when compression does not save space.
+                    compressed = encode_snappy(
+                        bytes,
+                        snappy_max_compressed_length(values_size),
+                        level_bytes,
+                    )
+                    is_compressed = len(compressed) < values_size
+            var stored_size = body_size
+            if is_compressed:
+                stored_size = len(compressed)
+                if options.page_version == 2:
+                    stored_size += level_bytes
             var header = _plain_header(
                 page_rows,
-                len(bytes),
+                body_size,
                 options.page_version,
                 page_nulls,
                 level_bytes,
+                stored_size,
+                is_compressed,
             )
-            var size = Int64(len(header)) + Int64(len(bytes))
+            var size = Int64(len(header)) + Int64(stored_size)
             if size > Int64.MAX - offset:
                 raise Error("Output file offset overflow")
             file.write_all(header)
-            file.write_all(bytes)
+            if is_compressed:
+                if options.page_version == 2 and level_bytes != 0:
+                    var levels = List[UInt8](capacity=level_bytes)
+                    for i in range(level_bytes):
+                        levels.append(bytes[i])
+                    file.write_all(levels)
+                file.write_all(compressed)
+            else:
+                file.write_all(bytes)
+            var raw_size = Int64(len(header)) + Int64(body_size)
+            if raw_size > Int64.MAX - uncompressed_size:
+                raise Error("Uncompressed row-group size overflow")
+            uncompressed_size += raw_size
             offset += size
             written += page_rows
         groups.append(
             _WrittenGroup(
-                group_offset, offset - group_offset, Int64(count), Int64(nulls)
+                group_offset,
+                offset - group_offset,
+                uncompressed_size,
+                Int64(count),
+                Int64(nulls),
             )
         )
         start += count
@@ -231,6 +283,7 @@ def save_numeric[
         column.size(),
         groups,
         options.max_metadata_bytes,
+        options.codec,
     )
     if Int64(len(footer)) + 8 > Int64.MAX - offset:
         raise Error("Output file offset overflow")

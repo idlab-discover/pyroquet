@@ -72,8 +72,11 @@ def main():
     # Literal dotted field names are not nested paths.
     p=OUT/'dotted.parquet';pq.write_table(pa.table({'a.b':pa.array([0,None,2**32-1],pa.uint32())}),p,compression='NONE',use_dictionary=False)
     count+=compare(p,'a.b')
+    p=OUT/'compressed.parquet'
+    pq.write_table(pa.table({'value':pa.array([1],pa.uint32())}),p,compression='snappy',use_dictionary=False)
+    count+=compare(p)
     for name,kwargs,table in [
-      ('compressed',{'compression':'snappy','use_dictionary':False},pa.table({'value':pa.array([1],pa.uint32())})),
+      ('unsupported-compression',{'compression':'gzip','use_dictionary':False},pa.table({'value':pa.array([1],pa.uint32())})),
       ('dictionary',{'compression':'NONE','use_dictionary':True},pa.table({'value':pa.array([1],pa.uint32())})),
       ('signed',{'compression':'NONE','use_dictionary':False},pa.table({'value':pa.array([1],pa.int32())})),
       ('nested',{'compression':'NONE','use_dictionary':False},pa.table({'value':pa.array([[1]],pa.list_(pa.uint32()))})),
@@ -104,5 +107,5 @@ def main():
     ]:bad_body(name,body)
     bad_body('required-truncated',b'\0'*11,False)
     (OUT/'oracle-limitations.json').write_text(json.dumps(FP_FAILURES,indent=2))
-    print(f'Matched {count} values/nulls across {len(paths)+1} files against PyArrow and DuckDB; fastparquet matched {len(paths)+1-len(FP_FAILURES)}, with {len(FP_FAILURES)} documented V2 oracle failures. Rejected 16 unsupported/malformed/budget cases and 2 padded fastparquet fixtures.')
+    print(f'Matched {count} values/nulls across {len(paths)+2} files against PyArrow and DuckDB; fastparquet matched {len(paths)+2-len(FP_FAILURES)}, with {len(FP_FAILURES)} documented V2 oracle failures. Rejected 16 unsupported/malformed/budget cases and 2 padded fastparquet fixtures.')
 if __name__=='__main__':main()

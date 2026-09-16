@@ -2,7 +2,7 @@
 from std.memory import bitcast
 from std.os import listdir
 from std.tempfile import TemporaryDirectory
-from std.testing import assert_equal, assert_raises, TestSuite
+from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 from numojo.routines.creation import empty
 from pyroquet.numojo_io import NumericColumn, load_numeric
 from pyroquet.numojo_write import save_numeric, NumericWriteOptions
@@ -166,6 +166,100 @@ def test_v2_headers_levels_and_page_null_counts() raises:
                 NumericWriteOptions(page_version=3),
             )
         assert_equal(len(listdir(directory)), 2)
+
+
+def test_snappy_page_sizes_and_group_totals() raises:
+    with TemporaryDirectory() as directory:
+        var values = empty[DType.int64]([128])
+        for i in range(128):
+            values.unsafe_ptr()[unsafe_offset=i] = 42
+        var column = NumericColumn[DType.int64](values^, List[UInt8](), "x", 0)
+        for version in range(1, 3):
+            var path = directory + "/snappy" + String(version) + ".parquet"
+            save_numeric[DType.int64](
+                path,
+                column,
+                NumericWriteOptions(
+                    codec=1, page_version=version, page_rows=64
+                ),
+            )
+            var metadata = inspect_metadata(path)
+            var pages = inspect_column_pages(path, 0, 0)
+            var stored = Int64(0)
+            var raw = Int64(0)
+            for page in pages:
+                assert_true(
+                    page.header.compressed_page_size
+                    < page.header.uncompressed_page_size
+                )
+                if version == 2:
+                    assert_true(page.header.is_compressed)
+                    assert_true(page.header.definition_levels_byte_length > 0)
+                stored += Int64(
+                    page.header.header_size + page.header.compressed_page_size
+                )
+                raw += Int64(
+                    page.header.header_size + page.header.uncompressed_page_size
+                )
+            assert_equal(metadata.row_groups[0].columns[0].codec, 1)
+            assert_equal(
+                metadata.row_groups[0].columns[0].total_compressed_size, stored
+            )
+            assert_equal(
+                metadata.row_groups[0].columns[0].total_uncompressed_size, raw
+            )
+            assert_equal(metadata.row_groups[0].total_compressed_size, stored)
+            assert_equal(metadata.row_groups[0].total_byte_size, raw)
+            var loaded = load_numeric[DType.int64](path, "x")
+            assert_equal(loaded.size(), 128)
+            assert_equal(loaded.null_count(), 0)
+            for i in range(128):
+                assert_equal(loaded.value(i).value(), Int64(42))
+
+
+def test_snappy_v2_fallback_and_v1_expansion_limit() raises:
+    with TemporaryDirectory() as directory:
+        var values = empty[DType.int32]([1])
+        values.unsafe_ptr()[unsafe_offset=0] = 17
+        var column = NumericColumn[DType.int32](values^, List[UInt8](), "x", 0)
+        # Four raw bytes fit, but their Snappy preamble/literal tag do not.
+        with assert_raises():
+            save_numeric[DType.int32](
+                directory + "/limited.parquet",
+                column,
+                NumericWriteOptions(codec=1, nullable=False, max_page_bytes=4),
+            )
+        assert_equal(len(listdir(directory)), 0)
+        with assert_raises():
+            save_numeric[DType.int32](
+                directory + "/invalid.parquet",
+                column,
+                NumericWriteOptions(codec=2),
+            )
+        assert_equal(len(listdir(directory)), 0)
+        save_numeric[DType.int32](
+            directory + "/tiny.parquet",
+            column,
+            NumericWriteOptions(
+                codec=1, nullable=False, page_version=2, max_page_bytes=4
+            ),
+        )
+        var tiny = inspect_column_pages(directory + "/tiny.parquet", 0, 0)
+        assert_equal(tiny[0].header.is_compressed, False)
+        assert_equal(tiny[0].header.compressed_page_size, 4)
+        var absent = empty[DType.int32]([1])
+        var null_column = NumericColumn[DType.int32](
+            absent^, [UInt8(0)], "x", 1
+        )
+        save_numeric[DType.int32](
+            directory + "/null.parquet",
+            null_column,
+            NumericWriteOptions(codec=1, page_version=2),
+        )
+        var null_pages = inspect_column_pages(directory + "/null.parquet", 0, 0)
+        assert_equal(null_pages[0].header.is_compressed, False)
+        assert_equal(null_pages[0].header.compressed_page_size, 2)
+        assert_equal(null_pages[0].header.uncompressed_page_size, 2)
 
 
 def main() raises:

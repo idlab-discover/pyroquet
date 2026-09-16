@@ -16,6 +16,7 @@ from pyroquet.numojo_io import (
     _decode_plain_page,
     _plain_value,
     _matches_numeric,
+    _numeric_page_body,
 )
 from pyroquet.format import PageHeader, SchemaElement
 
@@ -280,6 +281,46 @@ def test_numeric_container_rejects_strided_storage() raises:
     with assert_raises():
         var values = NDArray[DType.int16]([3], [2], 0)
         _ = NumericColumn[DType.int16](values^, List[UInt8](), "x", 0)
+
+
+def test_snappy_page_sections() raises:
+    # Independently constructed Snappy literal: length 4, literal tag 12.
+    var h = PageHeader()
+    h.page_type = 0
+    h.compressed_page_size = 6
+    h.uncompressed_page_size = 4
+    var body = _numeric_page_body([4, 12, 1, 2, 3, 4], h, 1)
+    assert_equal(len(body), 4)
+    assert_equal(body[3], UInt8(4))
+    h.page_type = 3
+    h.repetition_levels_byte_length = 0
+    h.definition_levels_byte_length = 2
+    h.compressed_page_size = 8
+    h.uncompressed_page_size = 6
+    body = _numeric_page_body([2, 1, 4, 12, 1, 2, 3, 4], h, 1)
+    assert_equal(len(body), 6)
+    assert_equal(body[0], UInt8(2))
+    assert_equal(body[5], UInt8(4))
+    h.is_compressed = False
+    h.compressed_page_size = 6
+    body = _numeric_page_body(body^, h, 1)
+    assert_equal(len(body), 6)
+    h.is_compressed = True
+    h.compressed_page_size = 3
+    h.uncompressed_page_size = 2
+    body = _numeric_page_body([6, 0, 0], h, 1)
+    assert_equal(len(body), 2)  # Compressed empty all-null value section.
+    with assert_raises():
+        _ = _numeric_page_body([6, 0, 1], h, 1)
+    with assert_raises():
+        _ = _numeric_page_body([6, 0, 0], h, 2)
+    h.definition_levels_byte_length = 4
+    with assert_raises():
+        _ = _numeric_page_body([6, 0, 0], h, 1)
+    h.definition_levels_byte_length = 2
+    h.is_compressed = False
+    with assert_raises():
+        _ = _numeric_page_body([6, 0, 0], h, 1)
 
 
 def main() raises:
