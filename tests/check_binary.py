@@ -94,6 +94,7 @@ def known_fastparquet_values(path, expected, actual):
 
 def readers(path, expected, fixed=True):
     arrow = pq.read_table(path)
+    assert arrow.schema.names == list(expected), path
     assert arrow.to_pydict() == expected, path
     if 'flag' in expected:
         assert arrow.schema.field('flag').type == pa.bool_()
@@ -101,13 +102,28 @@ def readers(path, expected, fixed=True):
         assert arrow.schema.field('raw').type == pa.binary()
     if 'fixed' in expected:
         assert arrow.schema.field('fixed').type == pa.binary(3)
+    if 'number' in expected:
+        assert arrow.schema.field('number').type == pa.int32()
     RESULTS.append([path.name, 'pyarrow-read', 'pass'])
     con = duckdb.connect()
-    result = con.execute('select * from read_parquet(?)', [str(path)]).fetchall()
+    query = con.execute('select * from read_parquet(?)', [str(path)])
+    duck_types = {'flag': 'BOOLEAN', 'raw': 'BLOB', 'fixed': 'BLOB', 'number': 'INTEGER'}
+    assert [(field[0], str(field[1])) for field in query.description] == [
+        (name, duck_types[name]) for name in expected
+    ], path
+    result = query.fetchall()
     assert result == list(zip(*expected.values())), path
     RESULTS.append([path.name, 'duckdb-read', 'pass'])
+    parquet = fastparquet.ParquetFile(path)
+    assert parquet.columns == list(expected), path
+    physical_types = {'flag': 0, 'raw': 6, 'fixed': 7, 'number': 1}
+    for name in expected:
+        field = parquet.schema.schema_element([name])
+        assert field.type == physical_types[name], (path, name, field.type)
+        if name == 'fixed':
+            assert field.type_length == 3, path
     try:
-        frame = fastparquet.ParquetFile(path).to_pandas()
+        frame = parquet.to_pandas()
         actual = {name: [None if pd.isna(v) else v for v in frame[name].tolist()] for name in expected}
     except (ValueError, IndexError) as exc:
         if not known_fastparquet_error(path, exc):
