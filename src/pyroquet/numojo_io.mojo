@@ -128,6 +128,7 @@ def _matches_numeric[dtype: DType](node: SchemaElement) -> Bool:
         )
 
 
+@always_inline
 def _plain_value[
     dtype: DType
 ](bytes: List[UInt8], offset: Int) raises -> Scalar[dtype]:
@@ -234,8 +235,8 @@ def _definition_levels(
     return present
 
 
-def _decode_numeric_page[
-    dtype: DType
+def _decode_numeric_page_impl[
+    dtype: DType, indexed: Bool
 ](
     bytes: List[UInt8],
     h: PageHeader,
@@ -246,7 +247,6 @@ def _decode_numeric_page[
     dictionary: List[Scalar[dtype]],
     has_dictionary: Bool,
 ) raises -> Int:
-    var indexed = h.encoding == 2 or h.encoding == 8
     if h.encoding != 0 and not indexed:
         raise Error("Unsupported numeric data encoding")
     if indexed and not has_dictionary:
@@ -312,7 +312,7 @@ def _decode_numeric_page[
             )
         var value = Scalar[dtype](0)
         if valid:
-            if indexed:
+            comptime if indexed:
                 var index = ids.next(bytes)
                 if UInt64(index) >= UInt64(len(dictionary)):
                     raise Error("Dictionary ID outside dictionary")
@@ -324,6 +324,35 @@ def _decode_numeric_page[
     if indexed:
         ids.finish()
     return nulls
+
+
+def _decode_numeric_page[
+    dtype: DType
+](
+    bytes: List[UInt8],
+    h: PageHeader,
+    nullable: Bool,
+    mut values: NDArray[dtype],
+    mut bitmap: List[UInt8],
+    output: Int,
+    dictionary: List[Scalar[dtype]],
+    has_dictionary: Bool,
+) raises -> Int:
+    # Select once per page; PLAIN keeps its original encoding-free inner loop.
+    if h.encoding == 2 or h.encoding == 8:
+        return _decode_numeric_page_impl[dtype, True](
+            bytes,
+            h,
+            nullable,
+            values,
+            bitmap,
+            output,
+            dictionary,
+            has_dictionary,
+        )
+    return _decode_numeric_page_impl[dtype, False](
+        bytes, h, nullable, values, bitmap, output, dictionary, has_dictionary
+    )
 
 
 def _decode_plain_page[
