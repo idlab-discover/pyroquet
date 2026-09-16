@@ -154,7 +154,7 @@ def chunk_cases():
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    subprocess.run(['pixi','run','mojo','build','-O3','-D','ASSERT=all','-I','src','tests/inspect_pages.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
+    subprocess.run(['pixi','run','mojo','build','-O3','-D','ASSERT=all','-I','src','-I','../NuMojo','tests/inspect_pages.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
     paths=list((ROOT/'build/fixtures/uint32').glob('*.parquet'))
     assert len(paths)==9,'Run make_uint32_fixtures.py first'
     for version in ('1.0','2.0'):
