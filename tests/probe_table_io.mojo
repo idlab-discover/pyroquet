@@ -21,4 +21,14 @@ def main() raises:
             for c in range(count):
                 var column = load_numeric[DType.int64](args[2], "c" + String(c))
                 checksum += column.value(column.size() - 1).value()
-    print(perf_counter_ns() - started, checksum)
+    var elapsed = perf_counter_ns() - started
+    # Complete validation stays outside the timed region.
+    var verified = load_table(args[2])
+    if verified.num_columns() != count:
+        raise Error("Benchmark column count mismatch")
+    for c in range(count):
+        ref column = verified.column(c).numeric[DType.int64]()
+        for row in range(column.size()):
+            if not column.value(row) or column.value(row).value() != Int64(row):
+                raise Error("Benchmark value mismatch")
+    print(elapsed, checksum)
