@@ -92,6 +92,7 @@ struct _HybridDecoder(Movable):
             if self._width < 32 and (self._value >> UInt32(self._width)) != 0:
                 raise Error("hybrid repeated value exceeds bit width")
 
+    @always_inline
     def next(mut self, data: List[UInt8]) raises -> UInt32:
         if self._end > len(data):
             raise Error("hybrid stream exceeds buffer")
