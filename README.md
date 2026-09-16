@@ -10,8 +10,9 @@ column per file, enabling numeric save/load round trips.
 An independent native `compact_protocol` module now handles Thrift Compact
 metadata encoding. Pyroquet now interprets schema trees and column chunks,
 including UInt32 annotations, and validates local chunk/index byte ranges.
-Bounded page-header reading and uncompressed PLAIN numeric body decoding are
-available. Non-numeric types, compression, and dictionary decoding remain open.
+Bounded page-header reading and PLAIN numeric body decoding are available with
+uncompressed or native Snappy pages. Non-numeric types, other codecs, and
+dictionary decoding remain open.
 
 ## Development
 
@@ -26,6 +27,7 @@ pixi run test-pages-release
 pixi run test-numojo-release
 pixi run test-publication-release
 pixi run test-numeric-write-release
+pixi run test-codecs-release
 pixi run build
 pixi run package
 pixi run package-compact
@@ -52,6 +54,7 @@ build/oracle-uv/bin/python tests/check_pages.py
 build/oracle-uv/bin/python tests/check_numojo.py
 build/oracle-uv/bin/python tests/check_numeric.py
 build/oracle-uv/bin/python tests/check_numeric_write.py
+build/oracle-uv/bin/python tests/check_codecs.py
 python tests/check_numojo_ownership.py
 ```
 
@@ -112,8 +115,8 @@ pixi run mojo run -I src -I ../NuMojo examples/load_numojo.mojo file.parquet col
 
 `pyroquet.numojo_io.load_numeric[dtype](path, column_name)` loads a named top-level
 numeric column across all row groups. It supports required/nullable columns, V1/V2 pages,
-uncompressed PLAIN values, and RLE/bit-packed hybrid definition levels. Names are
-literal, so `a.b` selects a top-level field named `a.b`. Compressed, dictionary,
+uncompressed or Snappy PLAIN values, and RLE/bit-packed hybrid definition levels. Names are
+literal, so `a.b` selects a top-level field named `a.b`. Other codecs, dictionary,
 nested, encrypted, and non-numeric columns are explicitly unsupported.
 
 Choose a compile-time `DType`: `int8`, `uint8`, `int16`, `uint16`, `int32`,
@@ -151,7 +154,7 @@ rejection cases. The loader never returns partially decoded output.
 `pyroquet.numojo_write.save_numeric[dtype](path, column, options)` borrows a
 `NumericColumn[dtype]` and creates a new single-column Parquet file. It supports
 all ten numeric dtypes above, required/nullable columns, empty/all-null inputs,
-and multiple pages/row groups. Output uses UNCOMPRESSED PLAIN V1 or V2 with matching
+and multiple pages/row groups. Output uses UNCOMPRESSED or SNAPPY PLAIN V1/V2 with matching
 modern/legacy integer annotations and null-count statistics. Numeric values,
 validity, row order, and floating bits are preserved; source layout and other
 metadata are not copied.
@@ -175,6 +178,7 @@ with unit stride. Saving borrows that storage without a full decoded-column copy
 | Option | Default | Meaning |
 |---|---:|---|
 | `page_version` | 1 | Data page format: 1 or 2; values remain PLAIN |
+| `codec` | 0 | Parquet compression: 0 (uncompressed) or 1 (native Snappy) |
 | `page_rows` | 65,536 | Maximum rows per page |
 | `row_group_rows` | 1,048,576 | Maximum rows per group |
 | `max_page_bytes` | 1 MiB | Conservative page-body allocation bound |
@@ -182,8 +186,10 @@ with unit stride. Saving borrows that storage without a full decoded-column copy
 | `max_row_groups` | 100,000 | Retained group-record count limit |
 
 V1 remains the default. V2 stores level lengths and page row/null counts in its
-header, omits the V1 four-byte level prefix, and explicitly sets
-`is_compressed=False`. Both formats use the same numeric array and validity.
+header and omits the V1 four-byte level prefix. With `codec=1`, V1 compresses the
+whole body; V2 compresses only values and keeps raw values when compression does
+not reduce their size. Both formats use the same numeric array and validity.
+Snappy encoding and decoding execute in Mojo without an external codec library.
 
 Page and group rows must be positive. The writer rejects options whose
 conservative page bound exceeds `max_page_bytes`, using the smaller of the
@@ -193,6 +199,10 @@ the four-byte level prefix for nullable V1 pages only.
 Small header buffers and retained group records are accounted separately;
 footer memory grows with groups and column-name length. These are logical
 allocation limits, not an RSS ceiling. The encoded file is streamed page by page.
+For Snappy, `max_page_bytes` bounds each raw and stored body separately; compressed
+expansion may exceed the limit and fail the write. Codec workspace and simultaneous
+page buffers are additional memory. V2 reading also assembles levels and decoded
+values into a bounded page body; no additional full-column array is created.
 
 The destination appears only after the complete staged file closes. Existing
 files, directories and symlinks are never replaced. Publication uses a private
