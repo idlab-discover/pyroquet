@@ -2,8 +2,8 @@
 from .table import Column
 from .schema import SchemaNode
 from .io import NewFile
-from .numojo_write import NumericWriteOptions, _append_u32, _write_page
-from .format.numeric_writer import _WrittenGroup
+from .format.page_write import NumericWriteOptions, _append_u32, _write_page
+from .format.flat_writer import _WrittenGroup
 from .format.binary_values import encode_plain_binary
 from .format.boolean_values import encode_plain_boolean
 

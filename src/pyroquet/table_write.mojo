@@ -4,8 +4,9 @@ from .table import Table
 from .schema import SchemaNode
 from .binary_write import _write_binary_chunk
 from .io import NewFile
-from .numojo_write import NumericWriteOptions, _write_numeric_chunk, _append_u32
-from .format.numeric_writer import _WrittenField, _WrittenGroup, _table_footer
+from .numojo_write import _write_numeric_chunk
+from .format.page_write import NumericWriteOptions, _append_u32
+from .format.flat_writer import _WrittenField, _WrittenGroup, _table_footer
 
 
 struct ColumnWriteOptions(ImplicitlyCopyable):

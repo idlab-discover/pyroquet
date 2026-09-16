@@ -6,7 +6,7 @@ from .format.pages import PageLimits, PageHeader, _ColumnPages
 from .format.hybrid import _HybridDecoder
 from .format.binary_values import decode_plain_binary
 from .format.boolean_values import decode_boolean_values
-from .numojo_io import _numeric_page_body, _definition_levels, _u32
+from .format.flat_pages import _page_body, _flat_page_values
 from .binary_column import BinaryColumn, BinaryBuilder
 from .boolean_column import BooleanColumn
 from .table import Column
@@ -28,42 +28,6 @@ def _binary_kind(node: SchemaElement) -> Int:
     if node.physical_type == 7 and node.type_length > 0:
         return SchemaNode.FIXED_BINARY
     return -1
-
-
-def _value_start(
-    data: List[UInt8],
-    h: PageHeader,
-    nullable: Bool,
-    mut validity: List[UInt8],
-    output: Int,
-) raises -> Int:
-    var start = 0
-    var end = 0
-    if h.page_type == 0:
-        if nullable:
-            if h.definition_level_encoding != 3:
-                raise Error("Only hybrid definition levels are supported")
-            start = 4
-            var length = Int(_u32(data, 0, len(data)))
-            if length > len(data) - start:
-                raise Error("Definition levels exceed page")
-            end = start + length
-    elif h.page_type == 3:
-        if h.repetition_levels_byte_length != 0:
-            raise Error("Flat column has repetition levels")
-        end = h.definition_levels_byte_length
-        if end < 0 or end > len(data) or (not nullable and end != 0):
-            raise Error("Invalid definition-level length")
-    else:
-        raise Error("Expected a data page")
-    var present = h.num_values
-    if nullable:
-        present = _definition_levels(
-            data, start, end, h.num_values, validity, output
-        )
-    if h.page_type == 3 and h.num_nulls != h.num_values - present:
-        raise Error("V2 null count disagrees with levels")
-    return end
 
 
 def _load_binary_from_file(
@@ -102,9 +66,7 @@ def _load_binary_from_file(
             var page = next.value()
             var h = page.header
             var data = file.read_bytes(h.compressed_page_size)
-            data = _numeric_page_body(
-                data^, h, group.columns[column_index].codec
-            )
+            data = _page_body(data^, h, group.columns[column_index].codec)
             if h.page_type == 2:
                 if kind == SchemaNode.BOOLEAN or (
                     h.encoding != 0 and h.encoding != 2
@@ -126,14 +88,15 @@ def _load_binary_from_file(
                 continue
             if h.num_values < 0 or h.num_values > rows - output:
                 raise Error("Data page exceeds output rows")
-            var start = _value_start(data, h, node.nullable(), validity, output)
-            var present = 0
-            for i in range(h.num_values):
-                var row = output + i
-                if not node.nullable():
+            var framing = _flat_page_values(
+                data, h, node.nullable(), validity, output
+            )
+            var start = framing[0]
+            var present = framing[1]
+            if not node.nullable():
+                for i in range(h.num_values):
+                    var row = output + i
                     validity[row // 8] |= UInt8(1) << UInt8(row % 8)
-                if validity[row // 8] & (UInt8(1) << UInt8(row % 8)):
-                    present += 1
             var payload = List[UInt8]()
             payload.reserve(len(data) - start)
             for i in range(start, len(data)):

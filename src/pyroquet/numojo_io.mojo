@@ -11,10 +11,15 @@ from numojo.core.ndarray import NDArray
 from numojo.routines.creation import empty
 from compact_protocol import CompactLimits
 from .format.footer import _read_footer_bytes_from_file
-from .format.metadata import SchemaElement, FileMetadata, parse_metadata, validate_file_ranges
+from .format.metadata import (
+    SchemaElement,
+    FileMetadata,
+    parse_metadata,
+    validate_file_ranges,
+)
 from .format.pages import PageLimits, PageHeader, _ColumnPages
 from .format.hybrid import _HybridDecoder
-from mojo_snappy import decode_snappy
+from .format.flat_pages import _page_body, _flat_page_values, _u32
 
 
 from .numeric_column import NumericColumn, NumojoUInt32Column, _check_numeric
@@ -76,83 +81,6 @@ def _plain_value[
             return bits.cast[dtype]()
 
 
-def _u32(bytes: List[UInt8], offset: Int, end: Int) raises -> UInt32:
-    if offset < 0 or offset > end or end > len(bytes) or end - offset < 4:
-        raise Error("Truncated UInt32 payload")
-    var value = UInt32(0)
-    for j in range(4):
-        value |= UInt32(bytes[offset + j]) << UInt32(j * 8)
-    return value
-
-
-def _set_valid(mut bitmap: List[UInt8], index: Int):
-    bitmap[index // 8] |= UInt8(1) << UInt8(index % 8)
-
-
-def _definition_levels(
-    bytes: List[UInt8],
-    start: Int,
-    end: Int,
-    count: Int,
-    mut bitmap: List[UInt8],
-    output: Int,
-) raises -> Int:
-    """Decode one-bit RLE/bit-packed hybrid directly into final validity."""
-    var pos = start
-    var written = 0
-    var present = 0
-    while written < count:
-        var header = UInt32(0)
-        var terminated = False
-        for j in range(5):
-            if pos >= end:
-                raise Error("Truncated definition-level run")
-            var byte = bytes[pos]
-            pos += 1
-            if j == 4 and byte > 15:
-                raise Error("Definition-level varint overflow")
-            header |= UInt32(byte & 127) << UInt32(j * 7)
-            if (byte & 128) == 0:
-                terminated = True
-                break
-        if not terminated:
-            raise Error("Definition-level varint overflow")
-        var run = Int(header >> 1)
-        if run == 0:
-            raise Error("Zero-length definition-level run")
-        if (header & 1) == 0:
-            if run > count - written or pos >= end:
-                raise Error("Definition-level RLE run exceeds page")
-            var value = bytes[pos]
-            pos += 1
-            if value > 1:
-                raise Error("Invalid flat definition level")
-            if value == 1:
-                for i in range(run):
-                    _set_valid(bitmap, output + written + i)
-                present += run
-            written += run
-        else:
-            # Each group contains eight one-bit levels in one byte.
-            if run > 2147483647 // 8 or run > end - pos:
-                raise Error("Truncated or oversized bit-packed levels")
-            var total = run * 8
-            var used = total
-            if used > count - written:
-                used = count - written
-                if total - used > 7:
-                    raise Error("Excess bit-packed definition levels")
-            for i in range(used):
-                if (bytes[pos + i // 8] >> UInt8(i % 8)) & 1:
-                    _set_valid(bitmap, output + written + i)
-                    present += 1
-            pos += run
-            written += used
-    if pos != end:
-        raise Error("Trailing definition-level bytes")
-    return present
-
-
 def _decode_numeric_page_impl[
     dtype: DType, indexed: Bool
 ](
@@ -176,42 +104,14 @@ def _decode_numeric_page_impl[
         or h.num_values > values.size - output
     ):
         raise Error("Page values exceed output allocation")
-    var data_start = 0
-    var level_start = 0
-    var level_end = 0
-    if h.page_type == 0:
-        if nullable:
-            if h.definition_level_encoding != 3:
-                raise Error(
-                    "Only RLE/hybrid V1 definition levels are supported"
-                )
-            var length = Int(_u32(bytes, 0, len(bytes)))
-            level_start = 4
-            if length > len(bytes) - 4:
-                raise Error("V1 definition levels exceed payload")
-            level_end = 4 + length
-            data_start = level_end
-    elif h.page_type == 3:
-        if h.repetition_levels_byte_length != 0:
-            raise Error("Flat columns cannot have repetition-level bytes")
-        level_end = h.definition_levels_byte_length
-        if level_end > len(bytes) or (not nullable and level_end != 0):
-            raise Error("Invalid V2 definition-level length")
-        data_start = level_end
-    else:
-        raise Error("Expected a data page")
-    var present = h.num_values
-    if nullable:
-        present = _definition_levels(
-            bytes, level_start, level_end, h.num_values, bitmap, output
-        )
+    var framing = _flat_page_values(bytes, h, nullable, bitmap, output)
+    var data_start = framing[0]
+    var present = framing[1]
     if not indexed and len(bytes) - data_start != present * (
         8 if size_of[Scalar[dtype]]() == 8 else 4
     ):
         raise Error("PLAIN byte length disagrees with non-null value count")
     var nulls = h.num_values - present
-    if h.page_type == 3 and h.num_nulls != nulls:
-        raise Error("V2 null count disagrees with definition levels")
     var ids = _HybridDecoder(0, 0, 0, 0)
     if indexed:
         if data_start >= len(bytes):
@@ -303,35 +203,6 @@ def _check_dictionary_header[dtype: DType](h: PageHeader, limit: Int) raises:
         raise Error("Dictionary byte length disagrees with entry count")
 
 
-def _numeric_page_body(
-    var bytes: List[UInt8], h: PageHeader, codec: Int
-) raises -> List[UInt8]:
-    """Decode one bounded body, preserving V2's uncompressed level prefix."""
-    if codec != 0 and codec != 1:
-        raise Error("Only UNCOMPRESSED and SNAPPY columns are supported")
-    if len(bytes) != h.compressed_page_size:
-        raise Error("Page body length disagrees with header")
-    if codec == 0 or (h.page_type == 3 and not h.is_compressed):
-        if len(bytes) != h.uncompressed_page_size:
-            raise Error("Uncompressed page body sizes disagree")
-        return bytes^
-    if h.page_type == 0 or h.page_type == 2:
-        return decode_snappy(bytes, h.uncompressed_page_size)
-    if h.page_type != 3 or h.repetition_levels_byte_length != 0:
-        raise Error("Expected a flat numeric data page")
-    var levels = h.definition_levels_byte_length
-    if levels < 0 or levels > len(bytes) or levels > h.uncompressed_page_size:
-        raise Error("V2 levels exceed page body")
-    var values = decode_snappy(bytes, h.uncompressed_page_size - levels, levels)
-    var body = List[UInt8]()
-    body.reserve(h.uncompressed_page_size)
-    for i in range(levels):
-        body.append(bytes[i])
-    for value in values:
-        body.append(value)
-    return body^
-
-
 def load_numeric[
     dtype: DType
 ](
@@ -377,7 +248,9 @@ def load_numeric[
     )
 
 
-def _load_numeric_from_file[dtype: DType](
+def _load_numeric_from_file[
+    dtype: DType
+](
     mut file: FileHandle,
     metadata: FileMetadata,
     selected: Int,
@@ -385,7 +258,8 @@ def _load_numeric_from_file[dtype: DType](
     max_output_bytes: Int,
     page_limits: PageLimits,
 ) raises -> NumericColumn[dtype]:
-    """Decode one selected leaf using already validated metadata and open file."""
+    """Decode one selected leaf using already validated metadata and open file.
+    """
     var node = metadata.schema[selected].copy()
     if not _matches_numeric[dtype](node) or node.max_repetition_level != 0:
         raise Error(
@@ -434,7 +308,7 @@ def _load_numeric_from_file[dtype: DType](
             var bytes = file.read_bytes(page.header.compressed_page_size)
             if len(bytes) != page.header.compressed_page_size:
                 raise Error("Short data-page payload read")
-            bytes = _numeric_page_body(
+            bytes = _page_body(
                 bytes^, page.header, group.columns[column_index].codec
             )
             if page.header.page_type == 2:

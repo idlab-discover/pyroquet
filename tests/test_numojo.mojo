@@ -1,4 +1,5 @@
 """Direct decode correctness, corruption rejection, and allocation identity."""
+from pyroquet.format.flat_pages import _page_body
 from std.testing import (
     assert_equal,
     assert_true,
@@ -18,7 +19,6 @@ from pyroquet.numojo_io import (
     _check_dictionary_header,
     _plain_value,
     _matches_numeric,
-    _numeric_page_body,
 )
 from pyroquet.format import PageHeader, SchemaElement
 
@@ -291,7 +291,7 @@ def test_snappy_page_sections() raises:
     h.page_type = 0
     h.compressed_page_size = 6
     h.uncompressed_page_size = 4
-    var body = _numeric_page_body([4, 12, 1, 2, 3, 4], h, 1)
+    var body = _page_body([4, 12, 1, 2, 3, 4], h, 1)
     assert_equal(len(body), 4)
     assert_equal(body[3], UInt8(4))
     h.page_type = 3
@@ -299,30 +299,30 @@ def test_snappy_page_sections() raises:
     h.definition_levels_byte_length = 2
     h.compressed_page_size = 8
     h.uncompressed_page_size = 6
-    body = _numeric_page_body([2, 1, 4, 12, 1, 2, 3, 4], h, 1)
+    body = _page_body([2, 1, 4, 12, 1, 2, 3, 4], h, 1)
     assert_equal(len(body), 6)
     assert_equal(body[0], UInt8(2))
     assert_equal(body[5], UInt8(4))
     h.is_compressed = False
     h.compressed_page_size = 6
-    body = _numeric_page_body(body^, h, 1)
+    body = _page_body(body^, h, 1)
     assert_equal(len(body), 6)
     h.is_compressed = True
     h.compressed_page_size = 3
     h.uncompressed_page_size = 2
-    body = _numeric_page_body([6, 0, 0], h, 1)
+    body = _page_body([6, 0, 0], h, 1)
     assert_equal(len(body), 2)  # Compressed empty all-null value section.
     with assert_raises():
-        _ = _numeric_page_body([6, 0, 1], h, 1)
+        _ = _page_body([6, 0, 1], h, 1)
     with assert_raises():
-        _ = _numeric_page_body([6, 0, 0], h, 2)
+        _ = _page_body([6, 0, 0], h, 2)
     h.definition_levels_byte_length = 4
     with assert_raises():
-        _ = _numeric_page_body([6, 0, 0], h, 1)
+        _ = _page_body([6, 0, 0], h, 1)
     h.definition_levels_byte_length = 2
     h.is_compressed = False
     with assert_raises():
-        _ = _numeric_page_body([6, 0, 0], h, 1)
+        _ = _page_body([6, 0, 0], h, 1)
 
 
 def test_dictionary_scatter_and_plain_fallback() raises:
@@ -425,7 +425,7 @@ def test_dictionary_header_limits_and_compression() raises:
         _check_dictionary_header[DType.uint8](h, 4)
     h.encoding = 2
     _check_dictionary_header[DType.uint8](h, 4)
-    var decoded = _numeric_page_body([4, 12, 7, 0, 0, 0], h, 1)
+    var decoded = _page_body([4, 12, 7, 0, 0, 0], h, 1)
     assert_equal(_plain_value[DType.uint32](decoded, 0), UInt32(7))
 
 

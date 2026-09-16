@@ -1,4 +1,4 @@
-"""Bounded footer emission for flat numeric PLAIN column chunks."""
+"""Bounded footer and header emission for flat PLAIN column chunks."""
 from compact_protocol import CompactWriter, CompactType, CompactLimits
 
 
