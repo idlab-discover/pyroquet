@@ -14,6 +14,8 @@ from pyroquet.numojo_io import (
     NumojoUInt32Column,
     NumericColumn,
     _decode_plain_page,
+    _decode_numeric_page,
+    _check_dictionary_header,
     _plain_value,
     _matches_numeric,
     _numeric_page_body,
@@ -321,6 +323,110 @@ def test_snappy_page_sections() raises:
     h.is_compressed = False
     with assert_raises():
         _ = _numeric_page_body([6, 0, 0], h, 1)
+
+
+def test_dictionary_scatter_and_plain_fallback() raises:
+    var dictionary: List[UInt32] = [99, 17]
+    var values = empty[DType.uint32]([9])
+    var bitmap: List[UInt8] = [0, 0]
+    var h = _header(True)
+    h.encoding = 8
+    # Levels 101; two packed IDs 1,0 plus legal final padding.
+    var body: List[UInt8] = [3, 5, 1, 3, 1]
+    assert_equal(
+        _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 0, dictionary, True
+        ),
+        1,
+    )
+    h.encoding = 2
+    assert_equal(
+        _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 3, dictionary, True
+        ),
+        1,
+    )
+    h.encoding = 0
+    var plain: List[UInt8] = [3, 5, 42, 0, 0, 0, 9, 0, 0, 0]
+    assert_equal(
+        _decode_numeric_page[DType.uint32](
+            plain, h, True, values, bitmap, 6, dictionary, True
+        ),
+        1,
+    )
+    var column = NumericColumn[DType.uint32](values^, bitmap^, "x", 3)
+    assert_equal(column.value(0).value(), UInt32(17))
+    assert_equal(column.value(2).value(), UInt32(99))
+    assert_equal(column.value(3).value(), UInt32(17))
+    assert_equal(column.value(6).value(), UInt32(42))
+    assert_equal(column.value(8).value(), UInt32(9))
+    assert_false(Bool(column.value(7)))
+
+
+def test_dictionary_bounds_and_zero_present() raises:
+    var dictionary: List[UInt32] = [7]
+    var values = empty[DType.uint32]([3])
+    var bitmap: List[UInt8] = [0]
+    var h = _header(True)
+    h.encoding = 8
+    var body: List[UInt8] = [3, 5, 0, 4]
+    assert_equal(
+        _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 0, dictionary, True
+        ),
+        1,
+    )
+    with assert_raises():
+        _ = _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 0, dictionary, False
+        )
+    # ID 1 is outside the one-entry dictionary.
+    body = [3, 5, 1, 4, 1]
+    with assert_raises():
+        _ = _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 0, dictionary, True
+        )
+    bitmap[0] = 0
+    dictionary = List[UInt32]()
+    h.num_nulls = 3
+    body = [6, 0, 0]
+    assert_equal(
+        _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 0, dictionary, True
+        ),
+        3,
+    )
+    body = [6, 0]
+    with assert_raises():
+        _ = _decode_numeric_page[DType.uint32](
+            body, h, True, values, bitmap, 0, dictionary, True
+        )
+
+
+def test_dictionary_header_limits_and_compression() raises:
+    var h = PageHeader()
+    h.page_type = 2
+    h.num_values = 1
+    h.encoding = 0
+    h.uncompressed_page_size = 4
+    h.compressed_page_size = 6
+    _check_dictionary_header[DType.uint8](h, 4)
+    with assert_raises():
+        _check_dictionary_header[DType.uint8](h, 3)
+    h.num_values = 2147483647
+    with assert_raises():
+        _check_dictionary_header[DType.uint8](h, 268435456)
+    h.num_values = 2
+    with assert_raises():
+        _check_dictionary_header[DType.uint8](h, 268435456)
+    h.num_values = 1
+    h.encoding = 8
+    with assert_raises():
+        _check_dictionary_header[DType.uint8](h, 4)
+    h.encoding = 2
+    _check_dictionary_header[DType.uint8](h, 4)
+    var decoded = _numeric_page_body([4, 12, 7, 0, 0, 0], h, 1)
+    assert_equal(_plain_value[DType.uint32](decoded, 0), UInt32(7))
 
 
 def main() raises:
