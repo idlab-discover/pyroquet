@@ -1,9 +1,12 @@
-"""Owned chunked tables: first materializable logical type is UInt32.
+"""Owned mixed-numeric tables and legacy chunked UInt32 construction helpers.
 
-Validity is separate from values and uses least-significant-bit-first packed
-bits. An absent bitmap means all valid. Column chunk boundaries are independent.
+Numeric tables borrow typed storage immutably. Validity is packed LSB-first;
+absent bitmaps mean all values are present. Schema owns field nullability.
 """
 
+from std.utils import Variant
+from numojo.routines.creation import empty
+from .numeric_column import NumericColumn
 from .schema import Schema, SchemaNode
 from .storage import FrozenBuffer
 
@@ -92,21 +95,74 @@ struct UInt32Column(Copyable, Movable, Sized):
         raise Error("Invalid column row accounting")
 
 
-struct Table(Copyable, Movable):
-    """Validated flat UInt32 table; nested materialization is explicitly rejected.
+struct Column(Movable):
+    """Own one numeric column and expose checked immutable typed borrows."""
 
-    An explicit row count preserves the shape of a table with zero columns.
-    Copying a table shares immutable schema, chunks, values and validity.
+    var _data: Variant[
+        NumericColumn[DType.int8],
+        NumericColumn[DType.uint8],
+        NumericColumn[DType.int16],
+        NumericColumn[DType.uint16],
+        NumericColumn[DType.int32],
+        NumericColumn[DType.uint32],
+        NumericColumn[DType.int64],
+        NumericColumn[DType.uint64],
+        NumericColumn[DType.float32],
+        NumericColumn[DType.float64],
+    ]
+    var _dtype: DType
+    var _name: String
+    var _size: Int
+    var _null_count: Int
+
+    def __init__[dtype: DType](out self, var column: NumericColumn[dtype]):
+        self._dtype = dtype
+        self._name = column.name()
+        self._size = column.size()
+        self._null_count = column.null_count()
+        self._data = column^
+
+    def numeric[
+        dtype: DType
+    ](self) raises -> ref[
+        origin_of(self._data[NumericColumn[dtype]])
+    ] NumericColumn[dtype]:
+        if self._dtype != dtype:
+            raise Error("Column dtype does not match requested borrow")
+        return self._data[NumericColumn[dtype]]
+
+    def dtype(self) -> DType:
+        return self._dtype
+
+    def name(self) -> String:
+        return self._name
+
+    def size(self) -> Int:
+        return self._size
+
+    def null_count(self) -> Int:
+        return self._null_count
+
+    def value(self, row: Int) raises -> Optional[UInt32]:
+        """Compatibility shorthand for UInt32 columns; checks the dtype."""
+        return self.numeric[DType.uint32]().value(row)
+
+
+struct Table(Movable):
+    """Own a validated flat mixed-numeric table with immutable typed borrowing.
+
+    Schema supplies names, order and nullability. Explicit row counts preserve
+    zero-column projection shape. Storage moves into the table without copies.
     """
 
     var _schema: Schema
-    var _columns: FrozenBuffer[UInt32Column]
+    var _columns: List[Column]
     var _num_rows: Int
 
     def __init__(
         out self,
         var schema: Schema,
-        var columns: List[UInt32Column],
+        var columns: List[Column],
         num_rows: Int,
     ) raises:
         if num_rows < 0:
@@ -115,15 +171,55 @@ struct Table(Copyable, Movable):
             raise Error("Table columns do not match flat schema")
         for i in range(len(columns)):
             var field = schema.node(i + 1)
-            if field.parent() != 0 or field.kind() != SchemaNode.UINT32:
-                raise Error("Only flat UInt32 materialization is implemented")
-            if len(columns[i]) != num_rows:
+            if field.parent() != 0 or field.kind() == SchemaNode.GROUP:
+                raise Error("Only flat numeric materialization is implemented")
+            if field.dtype() != columns[i].dtype():
+                raise Error("Column dtype disagrees with schema")
+            if field.name() != columns[i].name():
+                raise Error("Column name disagrees with schema")
+            if columns[i].size() != num_rows:
                 raise Error("Table columns have inconsistent row counts")
             if not field.nullable() and columns[i].null_count() != 0:
                 raise Error("Required field contains null values")
         self._schema = schema^
-        self._columns = FrozenBuffer(columns^)
+        self._columns = columns^
         self._num_rows = num_rows
+
+    def __init__(
+        out self,
+        var schema: Schema,
+        var columns: List[UInt32Column],
+        num_rows: Int,
+    ) raises:
+        """Adapt legacy chunked UInt32 storage into the common numeric table."""
+        if len(schema) - 1 != len(columns):
+            raise Error("Table columns do not match flat schema")
+        var numeric = List[Column]()
+        for i in range(len(columns)):
+            var values = empty[DType.uint32]([len(columns[i])])
+            var validity = List[UInt8]()
+            if columns[i].null_count():
+                validity.resize(
+                    len(columns[i]) // 8 + Int(len(columns[i]) % 8 != 0), 0
+                )
+            for row in range(len(columns[i])):
+                var item = columns[i].value(row)
+                values.unsafe_ptr()[
+                    unsafe_offset=row
+                ] = item.value() if item else UInt32(0)
+                if item and len(validity):
+                    validity[row // 8] |= UInt8(1) << UInt8(row % 8)
+            numeric.append(
+                Column(
+                    NumericColumn(
+                        values^,
+                        validity^,
+                        schema.node(i + 1).name(),
+                        columns[i].null_count(),
+                    )
+                )
+            )
+        self = Self(schema^, numeric^, num_rows)
 
     def num_rows(self) -> Int:
         return self._num_rows
@@ -134,5 +230,9 @@ struct Table(Copyable, Movable):
     def schema(self) -> Schema:
         return self._schema.copy()
 
-    def column(self, index: Int) raises -> UInt32Column:
+    def column(
+        self, index: Int
+    ) raises -> ref[origin_of(self._columns[0])] Column:
+        if index < 0 or index >= len(self._columns):
+            raise Error("Column index out of range")
         return self._columns[index]

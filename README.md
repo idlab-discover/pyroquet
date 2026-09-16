@@ -1,18 +1,12 @@
 # Pyroquet Next
 
 A Mojo-native Parquet rewrite using **Mojo 1.0.0** and Pixi.
-Native storage now supports consuming freeze, shared immutable slices, and
-borrowed views. Validated schema trees and flat nullable UInt32 tables support
-independent column chunk boundaries. A parameterized Parquet loader decodes flat
-numeric columns directly into NuMojo arrays. A bounded writer saves one numeric
-column per file, enabling numeric save/load round trips.
-
-An independent native `compact_protocol` module now handles Thrift Compact
-metadata encoding. Pyroquet now interprets schema trees and column chunks,
-including UInt32 annotations, and validates local chunk/index byte ranges.
-Bounded page-header reading and PLAIN numeric body decoding are available with
-uncompressed or native Snappy pages. Non-numeric types, other codecs, and
-dictionary decoding remain open.
+Native storage supports consuming freeze, shared immutable slices, and borrowed
+views. Schema-bearing flat tables own arbitrary combinations of ten numeric
+dtypes, with ordered projection and multi-column load/save. Typed numeric-column
+entry points remain available. Reading supports PLAIN and dictionary V1/V2 pages
+with uncompressed or native Snappy bodies; writing emits bounded PLAIN pages.
+Compact Protocol remains an independently buildable Mojo package.
 
 ## Snappy dependency
 
@@ -68,6 +62,7 @@ build/oracle-uv/bin/python tests/check_metadata.py
 build/oracle-uv/bin/python tests/check_pages.py
 build/oracle-uv/bin/python tests/check_numojo.py
 build/oracle-uv/bin/python tests/check_numeric.py
+build/oracle-uv/bin/python tests/check_numeric_dictionary.py
 build/oracle-uv/bin/python tests/check_numeric_write.py
 python tests/check_numojo_ownership.py
 ```
@@ -129,9 +124,11 @@ pixi run mojo run -I src -I ../NuMojo examples/load_numojo.mojo file.parquet col
 
 `pyroquet.numojo_io.load_numeric[dtype](path, column_name)` loads a named top-level
 numeric column across all row groups. It supports required/nullable columns, V1/V2 pages,
-uncompressed or Snappy PLAIN values, and RLE/bit-packed hybrid definition levels. Names are
-literal, so `a.b` selects a top-level field named `a.b`. Other codecs, dictionary,
-nested, encrypted, and non-numeric columns are explicitly unsupported.
+uncompressed or Snappy PLAIN and dictionary values, and RLE/bit-packed hybrid
+definition levels. Dictionary pages use PLAIN entries; data pages accept
+RLE_DICTIONARY and legacy PLAIN_DICTIONARY, including PLAIN fallback within a
+chunk. Names are literal, so `a.b` selects a top-level field named `a.b`. Other
+codecs, nested, encrypted, and non-numeric columns are explicitly unsupported.
 
 Choose a compile-time `DType`: `int8`, `uint8`, `int16`, `uint16`, `int32`,
 `uint32`, `int64`, `uint64`, `float32`, or `float64`. For example:
@@ -155,12 +152,20 @@ validity. `values()` borrows the numerical array read-only without copying;
 returns an optional `Scalar[dtype]`, and `size()` / `null_count()` expose counts.
 Null slots contain zero; **NuMojo operations do not automatically apply validity**.
 The loader fills the final allocation directly, with bounded page buffers and no
-intermediate full-column value array. Defaults cap values plus validity at 1 GiB;
+intermediate full-column value array. A private dictionary is released at each
+chunk boundary. Its physical and decoded size is bounded by
+`page_limits.max_page_bytes`; every ID is checked before lookup. Empty
+dictionaries support zero-present-value pages whose ID stream contains only the
+width byte. Defaults cap values plus validity at 1 GiB;
 `max_output_bytes`, `page_limits` and `metadata_limits` are configurable.
 
 CRC fields are not yet verified. Strict payload lengths reject the extra eight
 padding bytes emitted by fastparquet's V1 writer; those fixtures are documented
-rejection cases. The loader never returns partially decoded output.
+rejection cases. Dictionary streams likewise reject trailing bytes or more than
+seven unused IDs in the final packed group. The dictionary regression harness
+records affected Fastparquet 2026.5.0 and DuckDB 1.5.5 producer cases, along with
+Fastparquet V2 and width-32 reader limitations. The loader never returns partially
+decoded output.
 
 
 ## Numeric saving and round trips
@@ -238,3 +243,58 @@ page. It still verifies each bounded page through Fastparquet and checks complet
 files with Pyroquet, PyArrow, and DuckDB. Exact affected cases are recorded in
 `build/numeric-write-checks/v2/results.json`; failed public comparisons are not
 counted as passes.
+
+## Mixed numeric tables
+
+```mojo
+from pyroquet.table_io import load_table
+from pyroquet.table_write import save_table, TableWriteOptions, ColumnWriteOptions
+
+var selected: List[String] = ["temperature", "a.b"]
+var table = load_table("input.parquet", selected^)
+ref temperature = table.column(0).numeric[DType.int16]()
+print(temperature.size(), temperature.null_count())
+save_table("output.parquet", table, TableWriteOptions(row_group_rows=65536))
+```
+
+`load_table` selects all top-level fields by default. Explicit names are literal
+(including dots), preserve requested order, and must be unique and present.
+An explicit empty `List[String]` selects zero columns while retaining the file
+row count. All footer structure and local chunk/index ranges are validated even
+for unselected fields. Only selected page bodies are decoded, so unsupported
+unselected types/codecs/encodings can be projected away. Selected nested or
+non-numeric fields raise an error. CRCs are not checked.
+
+`Table(schema, columns, num_rows)` takes ownership of `List[Column]`; each
+`Column(NumericColumn[dtype])` moves its native allocation into a heterogeneous
+container. `column(i).dtype()` discovers the type and `numeric[dtype]()` returns
+a checked read-only borrow tied to the table. Schema names, dtypes, field order,
+nullability and equal lengths are enforced; required fields reject nulls. Tables
+are move-only. The legacy UInt32 table constructor and `column(i).value(row)`
+shorthand remain, with checked UInt32 access; legacy chunked inputs are normalized
+into contiguous storage. Standalone UInt32 chunk helpers remain available.
+
+`save_table` borrows all numeric storage and preserves schema nullability,
+including optional columns with no actual nulls. `TableWriteOptions` controls
+shared `row_group_rows`, `max_metadata_bytes`, `max_row_groups`, and the aggregate
+`max_column_chunks` (default 1,000,000). An optional fourth argument,
+`List[ColumnWriteOptions]`, follows schema order and sets each column's `codec`,
+`page_version`, `page_rows`, and `max_page_bytes` independently. Defaults match
+numeric saving. Pages are staged serially, and all columns share row-group ranges.
+Zero-row tables retain their schema. Zero-column writing is explicitly unsupported.
+Publication uses the same create-new atomic staging as `save_numeric`.
+
+The reader's `max_output_bytes` is an aggregate budget for all selected value
+allocations and packed validity (default 1 GiB). Footer and page limits are
+separate, including dictionary workspace. Saving retains bounded chunk records
+and a bounded footer; it never copies full decoded columns. These logical limits
+are not a process RSS ceiling.
+
+```sh
+pixi run mojo run -I src -I ../NuMojo examples/roundtrip_table.mojo input.parquet output.parquet
+pixi run test-table-write
+pixi run test-table-write-release
+python tests/check_table_ownership.py
+build/oracle-uv/bin/python tests/check_mixed.py
+build/oracle-uv/bin/python tests/check_numeric_dictionary.py
+```
