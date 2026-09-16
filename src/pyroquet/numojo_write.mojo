@@ -158,6 +158,95 @@ def _numeric_page[
     return bytes^
 
 
+def _write_numeric_chunk[
+    dtype: DType
+](
+    mut file: NewFile,
+    column: NumericColumn[dtype],
+    start: Int,
+    count: Int,
+    options: NumericWriteOptions,
+    mut offset: Int64,
+) raises -> _WrittenGroup:
+    """Emit one borrowed row range, retaining only bounded page staging."""
+    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    var group_offset = offset
+    var written = 0
+    var nulls = 0
+    var uncompressed_size = Int64(0)
+    while written < count:
+        var page_rows = min(options.page_rows, count - written)
+        var page_nulls = 0
+        var bytes = _numeric_page[dtype](
+            column,
+            start + written,
+            page_rows,
+            options.nullable,
+            page_nulls,
+            options.page_version,
+        )
+        nulls += page_nulls
+        # Present values occupy physical-width slots in both page formats.
+        var level_bytes = len(bytes) - (page_rows - page_nulls) * width
+        var body_size = len(bytes)
+        var compressed = List[UInt8]()
+        var is_compressed = False
+        if options.codec == 1:
+            if options.page_version == 1:
+                compressed = encode_snappy(bytes, options.max_page_bytes)
+                is_compressed = True
+            else:
+                var values_size = body_size - level_bytes
+                # Permit expansion within a bounded temporary buffer, then
+                # retain raw values when compression does not save space.
+                compressed = encode_snappy(
+                    bytes,
+                    snappy_max_compressed_length(values_size),
+                    level_bytes,
+                )
+                is_compressed = len(compressed) < values_size
+        var stored_size = body_size
+        if is_compressed:
+            stored_size = len(compressed)
+            if options.page_version == 2:
+                stored_size += level_bytes
+        var header = _plain_header(
+            page_rows,
+            body_size,
+            options.page_version,
+            page_nulls,
+            level_bytes,
+            stored_size,
+            is_compressed,
+        )
+        var size = Int64(len(header)) + Int64(stored_size)
+        if size > Int64.MAX - offset:
+            raise Error("Output file offset overflow")
+        file.write_all(header)
+        if is_compressed:
+            if options.page_version == 2 and level_bytes != 0:
+                var levels = List[UInt8](capacity=level_bytes)
+                for i in range(level_bytes):
+                    levels.append(bytes[i])
+                file.write_all(levels)
+            file.write_all(compressed)
+        else:
+            file.write_all(bytes)
+        var raw_size = Int64(len(header)) + Int64(body_size)
+        if raw_size > Int64.MAX - uncompressed_size:
+            raise Error("Uncompressed row-group size overflow")
+        uncompressed_size += raw_size
+        offset += size
+        written += page_rows
+    return _WrittenGroup(
+        group_offset,
+        offset - group_offset,
+        uncompressed_size,
+        Int64(count),
+        Int64(nulls),
+    )
+
+
 def save_numeric[
     dtype: DType
 ](
@@ -190,81 +279,9 @@ def save_numeric[
     var start = 0
     while start < column.size():
         var count = min(options.row_group_rows, column.size() - start)
-        var group_offset = offset
-        var written = 0
-        var nulls = 0
-        var uncompressed_size = Int64(0)
-        while written < count:
-            var page_rows = min(options.page_rows, count - written)
-            var page_nulls = 0
-            var bytes = _numeric_page[dtype](
-                column,
-                start + written,
-                page_rows,
-                options.nullable,
-                page_nulls,
-                options.page_version,
-            )
-            nulls += page_nulls
-            # Present values occupy physical-width slots in both page formats.
-            var level_bytes = len(bytes) - (page_rows - page_nulls) * width
-            var body_size = len(bytes)
-            var compressed = List[UInt8]()
-            var is_compressed = False
-            if options.codec == 1:
-                if options.page_version == 1:
-                    compressed = encode_snappy(bytes, options.max_page_bytes)
-                    is_compressed = True
-                else:
-                    var values_size = body_size - level_bytes
-                    # Permit expansion within a bounded temporary buffer, then
-                    # retain raw values when compression does not save space.
-                    compressed = encode_snappy(
-                        bytes,
-                        snappy_max_compressed_length(values_size),
-                        level_bytes,
-                    )
-                    is_compressed = len(compressed) < values_size
-            var stored_size = body_size
-            if is_compressed:
-                stored_size = len(compressed)
-                if options.page_version == 2:
-                    stored_size += level_bytes
-            var header = _plain_header(
-                page_rows,
-                body_size,
-                options.page_version,
-                page_nulls,
-                level_bytes,
-                stored_size,
-                is_compressed,
-            )
-            var size = Int64(len(header)) + Int64(stored_size)
-            if size > Int64.MAX - offset:
-                raise Error("Output file offset overflow")
-            file.write_all(header)
-            if is_compressed:
-                if options.page_version == 2 and level_bytes != 0:
-                    var levels = List[UInt8](capacity=level_bytes)
-                    for i in range(level_bytes):
-                        levels.append(bytes[i])
-                    file.write_all(levels)
-                file.write_all(compressed)
-            else:
-                file.write_all(bytes)
-            var raw_size = Int64(len(header)) + Int64(body_size)
-            if raw_size > Int64.MAX - uncompressed_size:
-                raise Error("Uncompressed row-group size overflow")
-            uncompressed_size += raw_size
-            offset += size
-            written += page_rows
         groups.append(
-            _WrittenGroup(
-                group_offset,
-                offset - group_offset,
-                uncompressed_size,
-                Int64(count),
-                Int64(nulls),
+            _write_numeric_chunk[dtype](
+                file, column, start, count, options, offset
             )
         )
         start += count
