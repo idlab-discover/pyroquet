@@ -16,7 +16,9 @@ struct _HybridDecoder(Movable):
     var _run_left: Int
     var _packed: Bool
     var _value: UInt32
-    var _bit_pos: Int
+    var _byte_pos: Int
+    var _buffer: UInt64
+    var _bits: Int
 
     def __init__(
         out self, start: Int, end: Int, bit_width: Int, count: Int
@@ -36,7 +38,9 @@ struct _HybridDecoder(Movable):
         self._run_left = 0
         self._packed = False
         self._value = 0
-        self._bit_pos = 0
+        self._byte_pos = 0
+        self._buffer = 0
+        self._bits = 0
 
     def _start_run(mut self, data: List[UInt8]) raises:
         var header = UInt32(0)
@@ -68,7 +72,9 @@ struct _HybridDecoder(Movable):
             var size = length * self._width
             if size > self._end - self._pos:
                 raise Error("truncated hybrid packed run")
-            self._bit_pos = self._pos * 8
+            self._byte_pos = self._pos
+            self._buffer = 0
+            self._bits = 0
             self._pos += size
             if self._run_left > self._left and self._pos != self._end:
                 raise Error("hybrid padding precedes trailing data")
@@ -95,20 +101,20 @@ struct _HybridDecoder(Movable):
             self._start_run(data)
         var value = self._value
         if self._packed:
-            # Read only overlapping bytes, including width-32 unaligned values.
-            var bits_left = self._width
-            var shift = 0
-            value = 0
-            while bits_left > 0:
-                var offset = self._bit_pos % 8
-                var take = min(bits_left, 8 - offset)
-                var mask = (UInt32(1) << UInt32(take)) - 1
-                value |= (
-                    (UInt32(data[self._bit_pos // 8]) >> UInt32(offset)) & mask
-                ) << UInt32(shift)
-                self._bit_pos += take
-                shift += take
-                bits_left -= take
+            # Retain leftover bits across values; each packed byte is read once.
+            # The validated whole-group payload bounds every refill. At most
+            # 39 bits are live (32 requested plus seven from the last byte).
+            while self._bits < self._width:
+                self._buffer |= UInt64(data[self._byte_pos]) << UInt64(
+                    self._bits
+                )
+                self._byte_pos += 1
+                self._bits += 8
+            value = UInt32(
+                self._buffer & ((UInt64(1) << UInt64(self._width)) - 1)
+            )
+            self._buffer >>= UInt64(self._width)
+            self._bits -= self._width
         self._run_left -= 1
         self._left -= 1
         return value

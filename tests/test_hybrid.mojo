@@ -49,10 +49,20 @@ def test_all_widths_cross_bytes() raises:
                 data[1 + pos // 8] |= UInt8(
                     (value >> UInt32(bit)) & 1
                 ) << UInt8(pos % 8)
-        var decoder = _HybridDecoder(0, len(data), width, 16)
-        for i in range(16):
-            assert_equal(decoder.next(data), values[i])
-        decoder.finish()
+        # Exercise every legal final-group padding length, including nonzero
+        # unused values, at every width. This catches accumulator tail reads.
+        for count in range(9, 17):
+            var decoder = _HybridDecoder(0, len(data), width, count)
+            for i in range(count):
+                assert_equal(decoder.next(data), values[i])
+            decoder.finish()
+        data.append(3)
+        for i in range(width):
+            data.append(data[1 + i])
+        var continued = _HybridDecoder(0, len(data), width, 24)
+        for i in range(24):
+            assert_equal(continued.next(data), values[i % 16])
+        continued.finish()
 
 
 def test_zero_width_and_empty_streams() raises:
