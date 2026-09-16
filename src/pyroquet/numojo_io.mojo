@@ -82,6 +82,45 @@ def _plain_value[
             return bits.cast[dtype]()
 
 
+def _decode_plain_values[
+    dtype: DType, origin: MutOrigin
+](
+    bytes: List[UInt8],
+    start: Int,
+    destination: Pointer[Scalar[dtype], origin],
+    count: Int,
+) raises:
+    """Initialize count writable scalar slots; never read destination storage.
+
+    The caller supplies at least count owner-tied writable slots that do not
+    overlap bytes.
+    Exact source bounds precede writes; narrowing failure may leave a partial
+    result, which must not be published. Scalars require no destruction.
+    """
+    _check_numeric[dtype]()
+    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    if (
+        start < 0
+        or start > len(bytes)
+        or count < 0
+        or count != (len(bytes) - start) // width
+        or (len(bytes) - start) % width != 0
+    ):
+        raise Error("PLAIN byte length disagrees with value count")
+    comptime if size_of[Scalar[dtype]]() >= 4 and is_little_endian():
+        if count != 0:
+            unsafe_memcpy(
+                dest=destination.unsafe_bitcast[UInt8](),
+                src=bytes.unsafe_ptr().unsafe_offset(start),
+                count=count * width,
+            )
+    else:
+        for i in range(count):
+            destination.unsafe_offset(i).unsafe_write(
+                _plain_value[dtype](bytes, start + i * width)
+            )
+
+
 def _gather_dictionary[
     dtype: DType, origin: MutOrigin
 ](
@@ -155,19 +194,14 @@ def _decode_numeric_page_impl[
         raise Error("PLAIN byte length disagrees with non-null value count")
     var nulls = h.num_values - present
     # All-present is established by decoded levels, never footer statistics.
-    # Equal physical/logical widths preserve every bit, including NaN payloads.
-    comptime if not indexed and size_of[
-        Scalar[dtype]
-    ]() >= 4 and is_little_endian():
+    comptime if not indexed:
         if nulls == 0:
-            if present != 0:
-                unsafe_memcpy(
-                    dest=values.unsafe_ptr()
-                    .unsafe_offset(output)
-                    .unsafe_bitcast[UInt8](),
-                    src=bytes.unsafe_ptr().unsafe_offset(data_start),
-                    count=present * size_of[Scalar[dtype]](),
-                )
+            _decode_plain_values[dtype](
+                bytes,
+                data_start,
+                values.unsafe_ptr().unsafe_offset(output),
+                present,
+            )
             return 0
     var ids = _HybridDecoder(0, 0, 0, 0)
     if indexed:
@@ -260,6 +294,22 @@ def _decode_plain_page[
     return _decode_numeric_page[dtype](
         bytes, h, nullable, values, bitmap, output, dictionary, False
     )
+
+
+def _plain_dictionary[
+    dtype: DType
+](bytes: List[UInt8], count: Int) raises -> List[Scalar[dtype]]:
+    """Validate byte length before allocation; return only initialized scalars.
+    """
+    _check_numeric[dtype]()
+    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    if count < 0 or count != len(bytes) // width or len(bytes) % width != 0:
+        raise Error("Dictionary byte length disagrees with entry count")
+    # Length is deliberately uninitialized. No readable Span, growth, or
+    # publication occurs until the write-only transfer succeeds.
+    var entries = List[Scalar[dtype]](unsafe_uninit_length=count)
+    _decode_plain_values[dtype](bytes, 0, entries.unsafe_ptr(), count)
+    return entries^
 
 
 def _check_dictionary_header[dtype: DType](h: PageHeader, limit: Int) raises:
@@ -382,14 +432,9 @@ def _load_numeric_from_file[
                 bytes^, page.header, group.columns[column_index].codec
             )
             if page.header.page_type == 2:
-                dictionary.reserve(page.header.num_values)
-                for i in range(page.header.num_values):
-                    dictionary.append(
-                        _plain_value[dtype](
-                            bytes,
-                            i * (8 if size_of[Scalar[dtype]]() == 8 else 4),
-                        )
-                    )
+                dictionary = _plain_dictionary[dtype](
+                    bytes, page.header.num_values
+                )
                 has_dictionary = True
                 continue
             null_count += _decode_numeric_page[dtype](

@@ -1,9 +1,15 @@
 """Dictionary run/batch integration, sparse fallback, and exact floating bits."""
 from std.memory import bitcast
+from std.sys import size_of
 from std.testing import assert_equal, assert_raises, TestSuite
 from numojo.routines.creation import empty
 from pyroquet.format import PageHeader
-from pyroquet.numojo_io import _decode_numeric_page
+from pyroquet.numojo_io import (
+    _decode_numeric_page,
+    _decode_plain_values,
+    _plain_dictionary,
+    _plain_value,
+)
 
 
 def _header(count: Int, levels: Int = 0, nulls: Int = 0) -> PageHeader:
@@ -272,6 +278,155 @@ def test_all_packed_widths_invalid_consumed_ids_and_output_guards() raises:
                     )
                 assert_equal(pointer[unsafe_offset=0], UInt32(0xA5A5A5A5))
                 assert_equal(pointer[unsafe_offset=66], UInt32(0xA5A5A5A5))
+
+
+def _entry_payload[dtype: DType](values: List[Scalar[dtype]]) -> List[UInt8]:
+    var bytes = List[UInt8]()
+    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    for value in values:
+        var bits: UInt64
+        comptime if dtype == DType.float32:
+            bits = UInt64(bitcast[DType.uint32](value))
+        elif dtype == DType.float64:
+            bits = bitcast[DType.uint64](value)
+        else:
+            bits = UInt64(value)
+        for j in range(width):
+            bytes.append(UInt8(bits >> UInt64(j * 8)))
+    return bytes^
+
+
+def _entry_cases[dtype: DType]() raises:
+    var patterns = List[Scalar[dtype]]()
+    comptime if dtype == DType.float32:
+        var bits: List[UInt32] = [
+            0,
+            0x80000000,
+            0x7F800000,
+            0xFF800000,
+            0x7FC12345,
+            0x7F800001,
+            1,
+        ]
+        for value in bits:
+            patterns.append(bitcast[dtype](value))
+    elif dtype == DType.float64:
+        var bits: List[UInt64] = [
+            0,
+            0x8000000000000000,
+            0x7FF0000000000000,
+            0xFFF0000000000000,
+            0x7FF8123456789ABC,
+            0x7FF0000000000001,
+            1,
+        ]
+        for value in bits:
+            patterns.append(bitcast[dtype](value))
+    else:
+        patterns.append(Scalar[dtype].MIN)
+        patterns.append(Scalar[dtype].MAX)
+        patterns.append(0)
+        patterns.append(1)
+    var counts: List[Int] = [0, 1, 4097]
+    for count in counts:
+        var expected = List[Scalar[dtype]]()
+        for i in range(count):
+            expected.append(patterns[i % len(patterns)])
+        var bytes = _entry_payload[dtype](expected)
+        var dictionary = _plain_dictionary[dtype](bytes, count)
+        assert_equal(len(dictionary), count)
+        for i in range(count):
+            _assert_bits[dtype](dictionary[i], expected[i])
+            _assert_bits[dtype](
+                dictionary[i],
+                _plain_value[dtype](
+                    bytes, i * (8 if size_of[Scalar[dtype]]() == 8 else 4)
+                ),
+            )
+        # The same transfer accepts an unaligned byte start and a bounded
+        # subrange of an existing owner. Neither neighboring scalar is touched.
+        var prefixed: List[UInt8] = [0xA5]
+        prefixed.extend(Span(bytes))
+        var guarded = List[Scalar[dtype]](length=count + 2, fill=7)
+        var address = Int(guarded.unsafe_ptr())
+        _decode_plain_values[dtype](
+            prefixed, 1, guarded.unsafe_ptr().unsafe_offset(1), count
+        )
+        assert_equal(Int(guarded.unsafe_ptr()), address)
+        assert_equal(guarded[0], Scalar[dtype](7))
+        assert_equal(guarded[count + 1], Scalar[dtype](7))
+        for i in range(count):
+            _assert_bits[dtype](guarded[i + 1], expected[i])
+
+
+def test_plain_dictionary_entries_all_dtypes_cardinalities_and_bits() raises:
+    comptime types = (
+        DType.int8,
+        DType.uint8,
+        DType.int16,
+        DType.uint16,
+        DType.int32,
+        DType.uint32,
+        DType.int64,
+        DType.uint64,
+        DType.float32,
+        DType.float64,
+    )
+    comptime for i in range(len(types)):
+        _entry_cases[types[i]]()
+
+
+def test_plain_entry_lengths_reject_before_writing() raises:
+    var guard = List[UInt32](length=3, fill=42)
+    var bytes: List[UInt8] = [1, 0, 0, 0]
+    var counts: List[Int] = [-1, 0, 2, Int.MAX]
+    for count in counts:
+        with assert_raises():
+            _ = _plain_dictionary[DType.uint32](bytes, count)
+        with assert_raises():
+            _decode_plain_values[DType.uint32](
+                bytes, 0, guard.unsafe_ptr().unsafe_offset(1), count
+            )
+    var starts: List[Int] = [-1, 1, 5, Int.MAX]
+    for start in starts:
+        with assert_raises():
+            _decode_plain_values[DType.uint32](
+                bytes, start, guard.unsafe_ptr().unsafe_offset(1), 1
+            )
+    for length in range(9):
+        if length == 4:
+            continue
+        var malformed = List[UInt8](length=length, fill=0)
+        with assert_raises():
+            _ = _plain_dictionary[DType.uint32](malformed, 1)
+        with assert_raises():
+            _decode_plain_values[DType.uint32](
+                malformed, 0, guard.unsafe_ptr().unsafe_offset(1), 1
+            )
+    for value in guard:
+        assert_equal(value, UInt32(42))
+
+
+def test_plain_dictionary_rejects_narrow_entries_before_publication() raises:
+    comptime types = (DType.int8, DType.uint8, DType.int16, DType.uint16)
+    comptime for i in range(len(types)):
+        comptime dtype = types[i]
+        for side in range(2):
+            var invalid = UInt32(Scalar[dtype].MAX) + 1
+            if side == 1:
+                invalid = UInt32(Scalar[dtype].MIN) - 1
+            var bytes: List[UInt8] = [1, 0, 0, 0]
+            for j in range(4):
+                bytes.append(UInt8(invalid >> UInt32(8 * j)))
+            with assert_raises():
+                _ = _plain_dictionary[dtype](bytes, 2)
+            var guard = List[Scalar[dtype]](length=4, fill=7)
+            with assert_raises():
+                _decode_plain_values[dtype](
+                    bytes, 0, guard.unsafe_ptr().unsafe_offset(1), 2
+                )
+            assert_equal(guard[0], Scalar[dtype](7))
+            assert_equal(guard[3], Scalar[dtype](7))
 
 
 def main() raises:
