@@ -10,9 +10,9 @@ column per file, enabling numeric save/load round trips.
 An independent native `compact_protocol` module now handles Thrift Compact
 metadata encoding. Pyroquet now interprets schema trees and column chunks,
 including UInt32 annotations, and validates local chunk/index byte ranges.
-Bounded page-header reading and PLAIN numeric body decoding are available with
-uncompressed or native Snappy pages. Non-numeric types, other codecs, and
-dictionary decoding remain open.
+Bounded page-header reading and PLAIN/dictionary numeric decoding are available
+with uncompressed or native Snappy pages. Non-numeric types and other codecs
+remain open.
 
 ## Snappy dependency
 
@@ -68,6 +68,7 @@ build/oracle-uv/bin/python tests/check_metadata.py
 build/oracle-uv/bin/python tests/check_pages.py
 build/oracle-uv/bin/python tests/check_numojo.py
 build/oracle-uv/bin/python tests/check_numeric.py
+build/oracle-uv/bin/python tests/check_numeric_dictionary.py
 build/oracle-uv/bin/python tests/check_numeric_write.py
 python tests/check_numojo_ownership.py
 ```
@@ -129,9 +130,11 @@ pixi run mojo run -I src -I ../NuMojo examples/load_numojo.mojo file.parquet col
 
 `pyroquet.numojo_io.load_numeric[dtype](path, column_name)` loads a named top-level
 numeric column across all row groups. It supports required/nullable columns, V1/V2 pages,
-uncompressed or Snappy PLAIN values, and RLE/bit-packed hybrid definition levels. Names are
-literal, so `a.b` selects a top-level field named `a.b`. Other codecs, dictionary,
-nested, encrypted, and non-numeric columns are explicitly unsupported.
+uncompressed or Snappy PLAIN and dictionary values, and RLE/bit-packed hybrid
+definition levels. Dictionary pages use PLAIN entries; data pages accept
+RLE_DICTIONARY and legacy PLAIN_DICTIONARY, including PLAIN fallback within a
+chunk. Names are literal, so `a.b` selects a top-level field named `a.b`. Other
+codecs, nested, encrypted, and non-numeric columns are explicitly unsupported.
 
 Choose a compile-time `DType`: `int8`, `uint8`, `int16`, `uint16`, `int32`,
 `uint32`, `int64`, `uint64`, `float32`, or `float64`. For example:
@@ -155,12 +158,20 @@ validity. `values()` borrows the numerical array read-only without copying;
 returns an optional `Scalar[dtype]`, and `size()` / `null_count()` expose counts.
 Null slots contain zero; **NuMojo operations do not automatically apply validity**.
 The loader fills the final allocation directly, with bounded page buffers and no
-intermediate full-column value array. Defaults cap values plus validity at 1 GiB;
+intermediate full-column value array. A private dictionary is released at each
+chunk boundary. Its physical and decoded size is bounded by
+`page_limits.max_page_bytes`; every ID is checked before lookup. Empty
+dictionaries support zero-present-value pages whose ID stream contains only the
+width byte. Defaults cap values plus validity at 1 GiB;
 `max_output_bytes`, `page_limits` and `metadata_limits` are configurable.
 
 CRC fields are not yet verified. Strict payload lengths reject the extra eight
 padding bytes emitted by fastparquet's V1 writer; those fixtures are documented
-rejection cases. The loader never returns partially decoded output.
+rejection cases. Dictionary streams likewise reject trailing bytes or more than
+seven unused IDs in the final packed group. The dictionary regression harness
+records affected Fastparquet 2026.5.0 and DuckDB 1.5.5 producer cases, along with
+Fastparquet V2 and width-32 reader limitations. The loader never returns partially
+decoded output.
 
 
 ## Numeric saving and round trips
