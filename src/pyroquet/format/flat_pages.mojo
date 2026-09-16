@@ -20,6 +20,21 @@ def _set_valid(mut bitmap: List[UInt8], index: Int):
     bitmap[index // 8] |= UInt8(1) << UInt8(index % 8)
 
 
+def _set_valid_run(mut bitmap: List[UInt8], first: Int, count: Int):
+    """Set a validated present run, preserving neighboring page bits."""
+    var pos = first
+    var stop = first + count
+    while pos < stop and pos % 8 != 0:
+        _set_valid(bitmap, pos)
+        pos += 1
+    while stop - pos >= 8:
+        bitmap[pos // 8] = 255
+        pos += 8
+    while pos < stop:
+        _set_valid(bitmap, pos)
+        pos += 1
+
+
 def _definition_levels(
     bytes: List[UInt8],
     start: Int,
@@ -59,8 +74,7 @@ def _definition_levels(
             if value > 1:
                 raise Error("Invalid flat definition level")
             if value == 1:
-                for i in range(run):
-                    _set_valid(bitmap, output + written + i)
+                _set_valid_run(bitmap, output + written, run)
                 present += run
             written += run
         else:

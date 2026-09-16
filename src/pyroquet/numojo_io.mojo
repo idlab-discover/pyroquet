@@ -4,7 +4,8 @@ NuMojo owns the sole decoded value allocation. Parquet contributes a packed
 validity bitmap; null slots are initialized to zero, not a sentinel. Numeric
 NuMojo operations do not automatically apply the bitmap.
 """
-from std.memory import bitcast
+from std.memory import bitcast, unsafe_memcpy
+from std.sys.info import is_little_endian
 from std.io.file import FileHandle
 from std.sys import size_of
 from numojo.core.ndarray import NDArray
@@ -82,12 +83,12 @@ def _plain_value[
 
 
 def _decode_numeric_page_impl[
-    dtype: DType, indexed: Bool
+    dtype: DType, indexed: Bool, origin: MutOrigin
 ](
     bytes: List[UInt8],
     h: PageHeader,
     nullable: Bool,
-    mut values: NDArray[dtype],
+    values: Span[Scalar[dtype], origin],
     mut bitmap: List[UInt8],
     output: Int,
     dictionary: List[Scalar[dtype]],
@@ -100,8 +101,8 @@ def _decode_numeric_page_impl[
     if (
         h.num_values < 0
         or output < 0
-        or output > values.size
-        or h.num_values > values.size - output
+        or output > len(values)
+        or h.num_values > len(values) - output
     ):
         raise Error("Page values exceed output allocation")
     var framing = _flat_page_values(bytes, h, nullable, bitmap, output)
@@ -112,6 +113,21 @@ def _decode_numeric_page_impl[
     ):
         raise Error("PLAIN byte length disagrees with non-null value count")
     var nulls = h.num_values - present
+    # All-present is established by decoded levels, never footer statistics.
+    # Equal physical/logical widths preserve every bit, including NaN payloads.
+    comptime if not indexed and size_of[
+        Scalar[dtype]
+    ]() >= 4 and is_little_endian():
+        if nulls == 0:
+            if present != 0:
+                unsafe_memcpy(
+                    dest=values.unsafe_ptr()
+                    .unsafe_offset(output)
+                    .unsafe_bitcast[UInt8](),
+                    src=bytes.unsafe_ptr().unsafe_offset(data_start),
+                    count=present * size_of[Scalar[dtype]](),
+                )
+            return 0
     var ids = _HybridDecoder(0, 0, 0, 0)
     if indexed:
         if data_start >= len(bytes):
@@ -162,14 +178,21 @@ def _decode_numeric_page[
             bytes,
             h,
             nullable,
-            values,
+            Span(unsafe_ptr=values.unsafe_ptr(), length=values.size),
             bitmap,
             output,
             dictionary,
             has_dictionary,
         )
     return _decode_numeric_page_impl[dtype, False](
-        bytes, h, nullable, values, bitmap, output, dictionary, has_dictionary
+        bytes,
+        h,
+        nullable,
+        Span(unsafe_ptr=values.unsafe_ptr(), length=values.size),
+        bitmap,
+        output,
+        dictionary,
+        has_dictionary,
     )
 
 

@@ -7,6 +7,8 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+test-decoder-bulk = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_decoder_bulk.mojo"
+test-decoder-bulk-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_decoder_bulk.mojo -o build/test-decoder-bulk && build/test-decoder-bulk"
 test-binary = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_column.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_boolean_column.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_values.mojo && mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_binary_io.mojo"
 test-binary-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_column.mojo -o build/test-binary-column && build/test-binary-column && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_boolean_column.mojo -o build/test-boolean-column && build/test-boolean-column && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_values.mojo -o build/test-binary-values && build/test-binary-values && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_binary_io.mojo -o build/test-binary-io && build/test-binary-io"
 test-hybrid = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_hybrid.mojo"
@@ -17,7 +19,7 @@ test-numeric-write = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_nume
 test-numeric-write-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo -o build/test-numeric-write && build/test-numeric-write"
 test-publication = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_publication.mojo"
 test-publication-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_publication.mojo -o build/test-publication && build/test-publication"
-check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-hybrid", "test-numojo", "test-publication", "test-numeric-write", "test-table-write", "test-binary"] }
+check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-hybrid", "test-decoder-bulk", "test-numojo", "test-publication", "test-numeric-write", "test-table-write", "test-binary"] }
 test-numojo = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo"
 test-numojo-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo -o build/test-numojo && build/test-numojo"
 test-pages = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_pages.mojo"
