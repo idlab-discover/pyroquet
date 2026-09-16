@@ -72,7 +72,7 @@ def malformed_cases():
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     binary = OUT / "inspect"
-    subprocess.run(["pixi", "run", "mojo", "build", "-O3", "-I", "src",
+    subprocess.run(["pixi", "run", "mojo", "build", "-O3", "-I", "src", "-I", "../NuMojo",
                     "tests/inspect_footer.mojo", "-o", str(binary)], cwd=ROOT, check=True)
     paths = sorted((ROOT / "build/fixtures/uint32").glob("*.parquet"))
     if len(paths) < 9:

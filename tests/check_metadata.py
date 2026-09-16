@@ -172,7 +172,7 @@ def adversarial():
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    subprocess.run(['pixi','run','mojo','build','-O3','-D','ASSERT=all','-I','src','tests/inspect_metadata.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
+    subprocess.run(['pixi','run','mojo','build','-O3','-D','ASSERT=all','-I','src','-I','../NuMojo','tests/inspect_metadata.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
     paths=list((ROOT/'build/fixtures/uint32').glob('*.parquet'))
     assert len(paths)==9,'Generate UInt32 fixtures first'
     nested=pa.table({
