@@ -1,6 +1,6 @@
 """Inventory a local Fastparquet corpus; write metadata, not decoded values.
 
-Run: build/validation-env/bin/python tests/inventory_fastparquet.py
+Run: build/oracle-uv/bin/python tests/inventory_fastparquet.py
 """
 import collections
 import json
