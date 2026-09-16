@@ -119,8 +119,10 @@ def main():
     manifest["package_sha256"] = sha(packed)
     if manifest["package_sha256"] == manifest["installed_sha256"]:
         manifest["installed_revision_identity"] = "exact package match to selected commit"
-    for mode in ("all", "none"):
-        flags = [compiler, "build", "-O3", "-D", "ASSERT=" + mode]
+    for mode in ("default", "all", "none"):
+        flags = [compiler, "build", "-O3"]
+        if mode != "default":
+            flags += ["-D", "ASSERT=" + mode]
         for route, includes, expected in (
             ("source", [source / "src", marker, shadow], "1 2 3 4"),
             ("marker", [marker, shadow], "91 92 93 94"),
