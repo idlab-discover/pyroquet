@@ -90,6 +90,7 @@ def generate():
     record('invalid-definition',schema,[(['items','list','element'],[data_page([0],[4],[],1,3)],1)],1,False,'Definition exceeds schema maximum')
     record('missing-physical-value',schema,[(['items','list','element'],[data_page([0],[3],[],1,3)],1)],1,False,'Defined element requires physical value')
     record('extra-physical-payload',schema,[(['items','list','element'],[data_page([0],[3],[9],1,3,extra=b'X')],1)],1,False,'README Data Pages prohibits extra padding')
+    record('required-list-optional-elements',[group('schema',1),group('items',1,0,3),group('list',1,2),leaf('element',1)],[(['items','list','element'],[data_page([0,0,1,0],[0,1,2,1],[3],1,2)],4)],3)
     # Required legacy primitive LIST with required elements: [], [1,2], [3].
     record('legacy-repeated-primitive',[group('schema',1),leaf('items',2)],[(['items'],[data_page([0,0,1,0],[0,1,1,1],[1,2,3],1,1)],4)],3)
     # Two-level optional LIST: null, [], [1,2], [3].
