@@ -18,3 +18,9 @@
 - Available CPU tools: `perf`, `valgrind` (including Callgrind/Massif), `gdb`, `objdump`, and `readelf`. Pixi also supplies `mojo-lldb`, `mojo-lldb-dap`, `lldb-server`, and `llvm-symbolizer` under `.pixi/envs/default/bin/`.
 - `nsys` and `ncu` are installed for relevant GPU investigations. Verify tool permissions and hardware support before relying on a capture; installation alone does not establish usability.
 - The existing `benchmarks/rewrite_phase_probe.py` measures the sibling baseline. When using it, read `docs/private/baseline-diagnostic.md` and keep historical measurements distinct from this rewrite's results.
+
+## Performance priorities
+
+- Target representative real-data Parquet files, primarily at least 50–100 MB on disk and larger. Inspect actual physical/logical types, codecs, page encodings and null density before selecting an optimization; distinguish whole-file size from selected compressed bytes and decoded output size.
+- Judge performance by repeatable complete-load improvements on useful real workloads. All-null and nearly-all-null fixtures remain correctness coverage; their performance regressions do not veto improvements on the target workloads. Preserve valid-input semantics and malformed-input rejection for every supported case.
+- Before choosing new optimization work, read ignored `docs/private/optimization-directions.md` and `docs/private/real-data-layouts.md` when available. Historical prompts are evidence, not a current implementation queue; feature additions need their own task scope.
