@@ -260,7 +260,8 @@ def compare(path, binary=None, projection=None):
                     return [fp_value(v, typ.value_type) for v in value]
                 return canonical(value, typ)
             actual = [{f.name:fp_value(frame[f.name].iloc[i], f.type) for f in schema} for i in range(len(frame))]
-            result['fastparquet'] = 'pass' if actual == expected else 'value_mismatch'
+            mismatch = next((i for i,(a,b) in enumerate(zip(actual,expected)) if a != b), None)
+            result['fastparquet'] = 'pass' if actual == expected else dict(status='value_mismatch', first_row=mismatch, expected=expected[mismatch] if mismatch is not None else None, actual=actual[mismatch] if mismatch is not None else None, actual_rows=len(actual))
         except Exception as error:
             result['fastparquet'] = dict(status='unsupported_representation', error=str(error))
     return result
