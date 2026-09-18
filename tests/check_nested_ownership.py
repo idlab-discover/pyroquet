@@ -47,6 +47,12 @@ def main() raises:
     var c = t.leaf(0).numeric[DType.uint64]()^
     print(c.size())
 '''),
+    "escape_structure": (False, '''def escape() raises -> ref[ImmStaticOrigin] NestedStructure:
+    var t = table()
+    return t.structure(1)
+def main() raises:
+    print(escape().size())
+'''),
     "copy_table": (False, '''def main() raises:
     var t = table()
     var other = t.copy()
