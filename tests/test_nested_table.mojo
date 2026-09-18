@@ -122,5 +122,13 @@ def test_binary_validity_is_not_length() raises:
     assert_equal(len(table.leaf(0).binary().value(1)), 0)
 
 
+def test_noncanonical_logical_element_name() raises:
+    with assert_raises():
+        var schema = Schema([SchemaNode("root", SchemaNode.GROUP, -1), SchemaNode("l", SchemaNode.LIST, 0), SchemaNode("x", SchemaNode.INT32, 1)])
+        var values = empty[DType.int32]([0])
+        var leaf = Column(NumericColumn(values^, List[UInt8](), "x", 0))
+        var table = NestedTable(schema^, [leaf^], [NestedStructure(0, [], [0])], 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

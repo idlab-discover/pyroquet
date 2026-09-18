@@ -133,6 +133,8 @@ struct NestedTable(Movable):
             var parent = node.parent()
             var count = sizes[parent]
             if parent and schema.node(parent).kind() == SchemaNode.LIST:
+                if node.name() != "element":
+                    raise Error("Logical LIST child must be named element")
                 count = structures[si[parent]].child_count()
             sizes[i] = count
             var group = (
