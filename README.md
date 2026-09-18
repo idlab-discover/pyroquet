@@ -6,7 +6,7 @@ views. Schema-bearing flat tables own arbitrary combinations of ten numeric
 dtypes, Boolean, binary, and fixed-length binary columns, with ordered projection
 and multi-column load/save. Typed numeric-column
 entry points remain available. Reading supports PLAIN and dictionary V1/V2 pages
-with uncompressed or native Snappy bodies; writing emits bounded PLAIN pages.
+with uncompressed, native Snappy or GZIP bodies; writing emits bounded PLAIN pages.
 Compact Protocol remains an independently buildable Mojo package.
 
 ## Snappy dependency
@@ -32,6 +32,31 @@ Run standalone codec checks from that project:
 pixi run --manifest-path ../mojo-snappy/pixi.toml check
 pixi run --manifest-path ../mojo-snappy/pixi.toml -e oracle test-interop
 ```
+
+## GZIP dependency
+
+Parquet GZIP (`codec=2`) uses RFC 1952 through Mojo standard-library FFI to
+zlib. `pixi install --locked` installs the pinned `libzlib` 1.3.2 runtime;
+`pixi run` selects its library directory through `LD_LIBRARY_PATH`. The adapter
+loads the portable Linux soname `libz.so.1` only when GZIP is used. Outside Pixi,
+provide that soname on the loader search path with the Linux x86-64 LP64 ABI.
+Missing libraries, missing symbols or incompatible ABI flags raise errors;
+UNCOMPRESSED and native SNAPPY do not initialize zlib.
+
+Reading accepts concatenated members (including empty members) and optional
+GZIP headers, verifies stream termination and GZIP CRC32/size trailers, and
+rejects trailing bytes, truncated members, zlib wrappers and raw DEFLATE.
+The declared Parquet page size bounds aggregate output; trailer sizes never
+control allocation. V2 levels remain uncompressed and `is_compressed=false`
+bypasses decompression. Parquet's separate optional page CRC is not checked.
+
+Codec workspace is separate from page and retained-column budgets: inflate
+uses up to a 32 KiB window plus zlib state and a one-byte overflow probe. The
+adapter releases zlib state on every recoverable error. zlib allocation failure
+raises; Mojo collection allocation exhaustion follows the standard runtime's
+process-failure behavior, as existing page and column allocations do.
+`tests/check_zlib_abi.py` checks installed headers, C field offsets, initialization,
+symbols and the resolved library hash (requires development headers and a C compiler).
 
 ## Development
 
@@ -133,7 +158,7 @@ pixi run mojo run -I src -I ../NuMojo examples/load_numojo.mojo file.parquet col
 
 `pyroquet.numojo_io.load_numeric[dtype](path, column_name)` loads a named top-level
 numeric column across all row groups. It supports required/nullable columns, V1/V2 pages,
-uncompressed or Snappy PLAIN and dictionary values, and RLE/bit-packed hybrid
+uncompressed, Snappy or GZIP PLAIN and dictionary values, and RLE/bit-packed hybrid
 definition levels. Dictionary pages use PLAIN entries; data pages accept
 RLE_DICTIONARY and legacy PLAIN_DICTIONARY, including PLAIN fallback within a
 chunk. Names are literal, so `a.b` selects a top-level field named `a.b`. Other

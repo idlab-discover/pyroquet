@@ -5,7 +5,7 @@ Typed materializers own values and dictionaries; no storage dependency here.
 """
 from .pages import PageHeader
 from std.bit import pop_count
-from mojo_snappy import decode_snappy
+from ..compression import decompress, validate_codec
 
 
 def _u32(bytes: List[UInt8], offset: Int, end: Int) raises -> UInt32:
@@ -165,8 +165,7 @@ def _page_body(
     var bytes: List[UInt8], h: PageHeader, codec: Int
 ) raises -> List[UInt8]:
     """Decode one bounded body, preserving V2's uncompressed level prefix."""
-    if codec != 0 and codec != 1:
-        raise Error("Only UNCOMPRESSED and SNAPPY columns are supported")
+    validate_codec(codec)
     if len(bytes) != h.compressed_page_size:
         raise Error("Page body length disagrees with header")
     if codec == 0 or (h.page_type == 3 and not h.is_compressed):
@@ -174,13 +173,15 @@ def _page_body(
             raise Error("Uncompressed page body sizes disagree")
         return bytes^
     if h.page_type == 0 or h.page_type == 2:
-        return decode_snappy(bytes, h.uncompressed_page_size)
+        return decompress(codec, bytes, h.uncompressed_page_size)
     if h.page_type != 3 or h.repetition_levels_byte_length != 0:
         raise Error("Expected a flat data page")
     var levels = h.definition_levels_byte_length
     if levels < 0 or levels > len(bytes) or levels > h.uncompressed_page_size:
         raise Error("V2 levels exceed page body")
-    var values = decode_snappy(bytes, h.uncompressed_page_size - levels, levels)
+    var values = decompress(
+        codec, bytes, h.uncompressed_page_size - levels, levels
+    )
     if levels == 0:
         return values^
     var body = List[UInt8](capacity=h.uncompressed_page_size)

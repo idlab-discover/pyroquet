@@ -7,6 +7,8 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+generate-gzip-fixtures = "build/oracle-uv/bin/python tests/gzip_fixture_oracle.py --generate"
+test-gzip-reads = { cmd = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_gzip_reads.mojo", depends-on = ["generate-gzip-fixtures"] }
 test-packed-validity = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_packed_validity.mojo"
 test-packed-validity-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_packed_validity.mojo -o build/test-packed-validity && build/test-packed-validity"
 test-packed-validity-noassert = "mkdir -p build && mojo build -O3 -D ASSERT=none -I src -I ../NuMojo tests/test_packed_validity.mojo -o build/test-packed-validity-noassert && build/test-packed-validity-noassert"
@@ -55,3 +57,7 @@ format = "mojo format src tests examples"
 [dependencies]
 mojo-snappy = { path = "../mojo-snappy" }
 mojo = "==1.0.0"
+libzlib = "==1.3.2"
+
+[activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"

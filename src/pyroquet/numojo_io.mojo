@@ -1,9 +1,10 @@
-"""Direct-to-NuMojo flat numeric reading (uncompressed/Snappy PLAIN and dictionary V1/V2).
+"""Direct-to-NuMojo flat numeric reading (uncompressed/Snappy/GZIP PLAIN and dictionary V1/V2).
 
 NuMojo owns the sole decoded value allocation. Parquet contributes a packed
 validity bitmap; null slots are initialized to zero, not a sentinel. Numeric
 NuMojo operations do not automatically apply the bitmap.
 """
+from .compression import validate_codec
 from std.memory import bitcast, unsafe_memcpy
 from std.sys.info import is_little_endian
 from std.io.file import FileHandle
@@ -404,11 +405,7 @@ def _load_numeric_from_file[
     if bitmap_bytes > max_output_bytes - rows * size_of[Scalar[dtype]]():
         raise Error("Column validity exceeds output budget")
     for group in metadata.row_groups:
-        if (
-            group.columns[column_index].codec != 0
-            and group.columns[column_index].codec != 1
-        ):
-            raise Error("Only UNCOMPRESSED and SNAPPY columns are supported")
+        validate_codec(group.columns[column_index].codec)
     var values = empty[dtype]([rows])
     var validity = List[UInt8]()
     validity.reserve(bitmap_bytes)

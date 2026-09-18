@@ -771,6 +771,7 @@ packages:
     target_platform: linux-64
   depends:
   - mojo-compiler ==1.0.0
+  license: Apache-2.0 AND BSD-3-Clause
   build_packages:
   - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
   - conda: https://conda.anaconda.org/conda-forge/linux-64/bzip2-1.0.8-hda65f42_10.conda
