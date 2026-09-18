@@ -89,6 +89,8 @@ def _write_page(
     level_bytes: Int,
     options: NumericWriteOptions,
     mut offset: Int64,
+    num_rows: Int = -1,
+    repetition_bytes: Int = 0,
 ) raises -> Int64:
     """Emit one physical PLAIN page with shared V1/V2 compression framing."""
     var body_size = len(bytes)
@@ -122,9 +124,11 @@ def _write_page(
         body_size,
         options.page_version,
         page_nulls,
-        level_bytes,
+        level_bytes - repetition_bytes,
         stored_size,
         is_compressed,
+        num_rows,
+        repetition_bytes,
     )
     var size = Int64(len(header)) + Int64(stored_size)
     if size > Int64.MAX - offset:

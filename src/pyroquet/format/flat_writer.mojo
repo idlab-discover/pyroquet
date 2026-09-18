@@ -34,6 +34,8 @@ def _plain_header(
     definition_bytes: Int = 0,
     compressed_size: Int = -1,
     is_compressed: Bool = False,
+    num_rows: Int = -1,
+    repetition_bytes: Int = 0,
 ) raises -> List[UInt8]:
     var writer = CompactWriter(CompactLimits(max_bytes=128))
     writer.begin_struct()
@@ -49,10 +51,10 @@ def _plain_header(
         _i32(writer, 4, 3)  # RLE repetition levels (absent for flat fields)
     else:
         _i32(writer, 2, nulls)
-        _i32(writer, 3, rows)  # Flat values are whole rows
+        _i32(writer, 3, rows if num_rows < 0 else num_rows)
         _i32(writer, 4, 0)  # PLAIN
         _i32(writer, 5, definition_bytes)
-        _i32(writer, 6, 0)  # No repetition-level stream
+        _i32(writer, 6, repetition_bytes)
         writer.write_bool_field(7, is_compressed)
     writer.end_struct()
     writer.end_struct()
