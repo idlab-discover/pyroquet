@@ -7,6 +7,9 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+test-delta = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_delta.mojo"
+test-delta-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_delta.mojo -o build/test-delta-all && build/test-delta-all"
+test-delta-noassert = "mkdir -p build && mojo build -O3 -D ASSERT=none -I src -I ../NuMojo tests/test_delta.mojo -o build/test-delta-none && build/test-delta-none"
 generate-gzip-fixtures = "build/oracle-uv/bin/python tests/gzip_fixture_oracle.py --generate"
 test-gzip-writes = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_gzip_writes.mojo"
 test-gzip-reads = { cmd = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_gzip_reads.mojo", depends-on = ["generate-gzip-fixtures"] }
@@ -36,7 +39,7 @@ test-numeric-write = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_nume
 test-numeric-write-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_write.mojo -o build/test-numeric-write && build/test-numeric-write"
 test-publication = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_publication.mojo"
 test-publication-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_publication.mojo -o build/test-publication && build/test-publication"
-check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-packed-validity", "test-snappy-pages", "test-hybrid", "test-decoder-bulk", "test-decoder-dictionary", "test-dictionary-gather", "test-nullable-dictionary", "test-numojo", "test-publication", "test-numeric-write", "test-table-write", "test-binary"] }
+check = { depends-on = ["smoke", "test-storage", "test-table", "test-compact", "test-metadata", "test-pages", "test-packed-validity", "test-snappy-pages", "test-hybrid", "test-delta", "test-decoder-bulk", "test-decoder-dictionary", "test-dictionary-gather", "test-nullable-dictionary", "test-numojo", "test-publication", "test-numeric-write", "test-table-write", "test-binary"] }
 test-numojo = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo"
 test-numojo-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_numojo.mojo -o build/test-numojo && build/test-numojo"
 test-pages = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_pages.mojo"

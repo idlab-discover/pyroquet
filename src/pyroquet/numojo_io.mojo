@@ -1,4 +1,4 @@
-"""Direct-to-NuMojo flat numeric reading (uncompressed/Snappy/GZIP PLAIN and dictionary V1/V2).
+"""Direct-to-NuMojo flat numeric reading (PLAIN, dictionary and delta V1/V2).
 
 NuMojo owns the sole decoded value allocation. Parquet contributes a packed
 validity bitmap; null slots are initialized to zero, not a sentinel. Numeric
@@ -21,6 +21,7 @@ from .format.metadata import (
 )
 from .format.pages import PageLimits, PageHeader, _ColumnPages
 from .format.hybrid import _HybridDecoder
+from .format.delta import _DeltaDecoder
 from .format.flat_pages import _page_body, _flat_page_values, _u32
 
 
@@ -250,6 +251,65 @@ def _decode_numeric_page_impl[
     return nulls
 
 
+def _delta_value[dtype: DType](bits: UInt64) raises -> Scalar[dtype]:
+    """Apply the same physical-bit interpretation and narrowing as PLAIN."""
+    comptime if size_of[Scalar[dtype]]() == 8:
+        return bitcast[dtype](bits)
+    elif size_of[Scalar[dtype]]() == 4:
+        return bitcast[dtype](UInt32(bits))
+    elif dtype.is_signed():
+        var signed = bitcast[DType.int32](UInt32(bits))
+        if signed < Int32(Scalar[dtype].MIN) or signed > Int32(
+            Scalar[dtype].MAX
+        ):
+            raise Error("Delta integer outside declared narrow range")
+        return signed.cast[dtype]()
+    else:
+        if bits > UInt64(Scalar[dtype].MAX):
+            raise Error("Delta integer outside declared narrow range")
+        return bits.cast[dtype]()
+
+
+def _decode_delta_page[
+    dtype: DType
+](
+    bytes: List[UInt8],
+    h: PageHeader,
+    nullable: Bool,
+    mut values: NDArray[dtype],
+    mut bitmap: List[UInt8],
+    output: Int,
+) raises -> Int:
+    comptime if dtype == DType.float32 or dtype == DType.float64:
+        raise Error("DELTA_BINARY_PACKED requires physical INT32 or INT64")
+    else:
+        if (
+            output < 0
+            or output > values.size
+            or h.num_values < 0
+            or h.num_values > values.size - output
+        ):
+            raise Error("Delta page exceeds output allocation")
+        var framing = _flat_page_values(bytes, h, nullable, bitmap, output)
+        var decoder = _DeltaDecoder[
+            64 if size_of[Scalar[dtype]]() == 8 else 32
+        ](bytes, framing[0], len(bytes), framing[1])
+        var pointer = values.unsafe_ptr()
+        for i in range(h.num_values):
+            var valid = True
+            if nullable:
+                valid = Bool(
+                    bitmap[(output + i) // 8]
+                    & (UInt8(1) << UInt8((output + i) % 8))
+                )
+            var value = Scalar[dtype](0)
+            if valid:
+                value = _delta_value[dtype](decoder.next(bytes))
+            pointer[unsafe_offset=output + i] = value
+        decoder.finish()
+        return h.num_values - framing[1]
+
+
 def _decode_numeric_page[
     dtype: DType
 ](
@@ -262,6 +322,10 @@ def _decode_numeric_page[
     dictionary: List[Scalar[dtype]],
     has_dictionary: Bool,
 ) raises -> Int:
+    if h.encoding == 5:
+        return _decode_delta_page[dtype](
+            bytes, h, nullable, values, bitmap, output
+        )
     # Select once per page; PLAIN keeps its original encoding-free inner loop.
     if h.encoding == 2 or h.encoding == 8:
         return _decode_numeric_page_impl[dtype, True](
