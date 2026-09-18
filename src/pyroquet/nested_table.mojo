@@ -80,7 +80,7 @@ def _column_valid(column: Column, row: Int) raises -> Bool:
         column.kind() == SchemaNode.BINARY
         or column.kind() == SchemaNode.FIXED_BINARY
     ):
-        return Bool(column.binary().value(row))
+        return column.binary().is_valid(row)
     comptime types = (
         DType.int8,
         DType.uint8,

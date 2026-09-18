@@ -8,6 +8,7 @@ from std.testing import (
 from numojo.routines.creation import empty
 from pyroquet import Schema, SchemaNode, Column
 from pyroquet.numeric_column import NumericColumn
+from pyroquet.binary_column import BinaryColumn
 from pyroquet.nested_table import NestedTable, NestedStructure
 
 
@@ -102,6 +103,23 @@ def test_required_and_parent_validity() raises:
         var table = NestedTable(
             schema^, [leaf^], [NestedStructure(1, [UInt8(0)])], 1
         )
+
+
+def test_binary_validity_is_not_length() raises:
+    var schema = Schema(
+        [
+            SchemaNode("root", SchemaNode.GROUP, -1),
+            SchemaNode("s", SchemaNode.GROUP, 0, True),
+            SchemaNode("b", SchemaNode.BINARY, 1, True),
+        ]
+    )
+    var leaf = Column("b", BinaryColumn([0, 0, 0], [], [UInt8(2)]))
+    var table = NestedTable(
+        schema^, [leaf^], [NestedStructure(2, [UInt8(2)])], 2
+    )
+    assert_false(table.leaf(0).binary().is_valid(0))
+    assert_true(table.leaf(0).binary().is_valid(1))
+    assert_equal(len(table.leaf(0).binary().value(1)), 0)
 
 
 def main() raises:
