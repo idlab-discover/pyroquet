@@ -153,8 +153,16 @@ def _gather_dictionary[
                 pointer[unsafe_offset=output] = value
                 output += 1
         else:
+            if (
+                count <= 0
+                or count > len(scratch)
+                or count > len(destination) - output
+            ):
+                raise Error("Invalid packed dictionary batch count")
+            # next_batch initialized [0, count); this borrow keeps scratch alive.
+            var packed_ids = scratch.unsafe_ptr()
             for i in range(count):
-                var index = scratch[i]
+                var index = packed_ids[unsafe_offset=i]
                 if UInt64(index) >= UInt64(len(dictionary)):
                     raise Error("Dictionary ID outside dictionary")
                 pointer[unsafe_offset=output + i] = dictionary[Int(index)]
