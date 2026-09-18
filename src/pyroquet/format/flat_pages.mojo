@@ -174,9 +174,16 @@ def _page_body(
         return bytes^
     if h.page_type == 0 or h.page_type == 2:
         return decompress(codec, bytes, h.uncompressed_page_size)
-    if h.page_type != 3 or h.repetition_levels_byte_length != 0:
-        raise Error("Expected a flat data page")
-    var levels = h.definition_levels_byte_length
+    if h.page_type != 3:
+        raise Error("Expected a data page")
+    if (
+        h.repetition_levels_byte_length < 0
+        or h.definition_levels_byte_length < 0
+    ):
+        raise Error("Negative V2 level length")
+    var levels = (
+        h.repetition_levels_byte_length + h.definition_levels_byte_length
+    )
     if levels < 0 or levels > len(bytes) or levels > h.uncompressed_page_size:
         raise Error("V2 levels exceed page body")
     var values = decompress(
