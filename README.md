@@ -5,7 +5,7 @@ Native storage supports consuming freeze, shared immutable slices, and borrowed
 views. Schema-bearing flat tables own arbitrary combinations of ten numeric
 dtypes, Boolean, binary, and fixed-length binary columns, with ordered projection
 and multi-column load/save. Typed numeric-column
-entry points remain available. Reading supports PLAIN and dictionary V1/V2 pages
+entry points remain available. Reading supports PLAIN, dictionary and integer DELTA_BINARY_PACKED V1/V2 pages
 with uncompressed, native Snappy or GZIP bodies; writing emits bounded PLAIN pages.
 Compact Protocol remains an independently buildable Mojo package.
 
@@ -403,3 +403,67 @@ hashes. Known oracle exceptions remain explicit: Fastparquet V2 nullable pages,
 Boolean RLE interpretation, trailing NUL loss in fixed binary dictionaries,
 and surplus PLAIN writer padding; DuckDB short-stream hybrid padding and its
 lack of a fixed-width BLOB writer type. Unsupported comparisons are not passes.
+
+## Nested STRUCT and primitive LIST tables
+
+`pyroquet.nested_io.load_nested_table` and
+`pyroquet.nested_write.save_nested_table` use `NestedTable`, which owns a logical
+schema tree, typed `Column` leaves, and `NestedStructure` parent validity and LIST
+offsets. Non-repeated STRUCTs may contain STRUCTs, primitive fields, or LISTs of
+primitives. Required/optional parents and elements are supported. Each leaf may
+have at most one repeated ancestor. Primitive support is the same ten numeric
+types, Boolean, unannotated raw binary, and fixed binary as flat tables.
+MAP, LIST of LIST, LIST of STRUCT, STRING/UTF8 and other new logical types remain
+unsupported. Annotated text is never treated as raw binary.
+
+A STRUCT child retains one slot per parent row; its slot is null when the parent
+is absent. LIST offsets address compact element slots, including null elements.
+Parent validity distinguishes null STRUCT from present STRUCT with null children,
+and null LIST from empty LIST. `table.structure(schema_index)` borrows structure;
+`table.leaf(table.leaf_index(schema_index))` borrows typed leaf storage. Borrowed
+views cannot outlive their owners. Saving borrows the table and publishes a new
+file atomically only after successful completion.
+
+Nested projection uses explicit component arrays, for example
+`projection=[["record", "count"], ["record", "samples"]]`. Components are literal:
+`["a.b"]` selects a field named `a.b`, while `["a", "b"]` traverses STRUCT `a`.
+Selected fields and their ancestors are retained in source schema order. Selecting
+an entire group selects every descendant and fails if any selected descendant is
+unsupported; selecting supported STRUCT descendants alone may succeed. Duplicate
+or overlapping selections raise. LIST is a terminal selection; its element cannot
+be projected separately. An explicit empty selection retains the row count.
+The existing `load_table` literal top-level names and requested ordering are
+unchanged.
+
+Readers interpret supported legacy primitive LIST layouts using the local Parquet
+compatibility rules, including repeated primitives and two-level LISTs. Physical
+LIST wrapper names normalize to a logical child named `element`; STRUCT and field
+names remain literal. Writers emit canonical three-level LISTs. Logical LIST
+storage therefore requires its primitive child to be named `element`.
+
+Nested readers reconstruct rows from bounded repetition/definition streams,
+validate sibling parent validity, accept legal unindexed V1 row continuations,
+and require V2 row-aligned pages. Two passes determine exact child cardinalities
+before typed allocation. The aggregate output limit charges retained validity,
+LIST/binary offsets and leaf values/bytes. Metadata, page, dictionary and codec
+workspaces have separate limits. Nested writers stage bounded PLAIN pages with
+row-aligned cuts. If a configured page exceeds the staging limit, writing raises
+without publishing the destination; reduce `page_rows` to fit multiple-row pages.
+A single oversized row/list requires a larger staging limit. Per-leaf column options follow logical
+schema primitive order. V1/V2 and existing UNCOMPRESSED, SNAPPY and GZIP behavior
+apply to nested pages as well.
+
+Physical INT32/INT64 `DELTA_BINARY_PACKED` decoding is available in flat and
+nested readers. Decoding applies two's-complement wrapping, then existing logical
+matching and narrow integer range checks. Legal final miniblock padding is
+accepted; malformed counts, parameters, widths, truncation and trailing payload
+raise. Writers retain PLAIN defaults; delta writing is not implemented.
+
+Focused development checks include `pixi run test-delta`,
+`pixi run test-nested-table`, `pixi run test-nested-levels`,
+`pixi run test-nested-read`, `pixi run test-nested-write`, and
+`build/oracle-uv/bin/python tests/check_nested_ownership.py`. Independent fixture utilities are
+`tests/delta_fixture_oracle.py` and `tests/nested_fixture_oracle.py`; use the pinned
+oracle environment. Oracle errors and unsupported representations are recorded
+separately, especially Fastparquet representations that lose STRUCT parent
+validity. Such comparisons do not count as passes.
