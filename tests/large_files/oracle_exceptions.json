@@ -1,0 +1,10 @@
+[
+  {
+    "file_sha256": "b5e1effeadd5c41547621472c6972cf22626eced53a5742e873acb8b6bc2960b",
+    "column": "value",
+    "error": "IndexError('boolean index did not match indexed array along axis 0; size of axis is 20000 but size of corresponding boolean axis is 131072')",
+    "version": "2026.5.0",
+    "evidence": "build/investigations/packed-dictionary-materialization/20260918-snappy010/oracles/corpus-validation-final.json",
+    "scope": "Fastparquet nullable dictionary V2 failure; not a parity pass"
+  }
+]
