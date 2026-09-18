@@ -32,6 +32,7 @@ from .binary_io import _binary_kind
 from .numeric_column import NumericColumn
 from .binary_column import BinaryColumn, BinaryBuilder
 from .string_column import StringColumn, _validate_string_binary
+from .enum_column import EnumBuilder, _enum_overhead
 from .boolean_column import BooleanColumn
 from .schema import Schema, SchemaNode
 from .table import Column
@@ -52,6 +53,8 @@ def _charge(mut budget: Int, amount: Int) raises:
 def _leaf_overhead(kind: Int, count: Int, budget: Int) raises -> Int:
     if count < 0 or budget < 0:
         raise Error("Invalid nested child count/budget")
+    if kind == SchemaNode.ENUM:
+        return _enum_overhead(count, budget)
     var bytes = _bitmap_bytes(count)
     if bytes > budget:
         raise Error("Nested leaf validity exceeds budget")
@@ -594,6 +597,11 @@ def _read_binary(
     var width = schema_node.fixed_width()
     var repeated = plan.repeated_def[leaf]
     var builder = BinaryBuilder(arena_budget, width)
+    var enum_builder = EnumBuilder(
+        count if kind == SchemaNode.ENUM else 0,
+        arena_budget + _enum_overhead(count, Int.MAX) if kind
+        == SchemaNode.ENUM else 8,
+    )
     var bitmap = List[UInt8]()
     var bits = List[UInt8]()
     if kind == SchemaNode.BOOLEAN:
@@ -630,7 +638,7 @@ def _read_binary(
                     width,
                     limits.max_page_bytes - (h.num_values + 1) * 8,
                 )
-                if kind == SchemaNode.STRING:
+                if kind == SchemaNode.STRING or kind == SchemaNode.ENUM:
                     _validate_string_binary(dictionary)
                 has_dictionary = True
                 continue
@@ -678,16 +686,25 @@ def _read_binary(
                         if booleans.value(used).value():
                             bits[output // 8] |= UInt8(1) << UInt8(output % 8)
                 elif not valid:
-                    builder.append_null()
+                    if kind == SchemaNode.ENUM:
+                        enum_builder.append_null()
+                    else:
+                        builder.append_null()
                 elif indexed:
                     var index = Int(ids.next(payload))
                     if index >= len(dictionary):
                         raise Error(
                             "Nested binary dictionary index out of range"
                         )
-                    builder.append(dictionary.value(index))
+                    if kind == SchemaNode.ENUM:
+                        enum_builder.append_bytes(dictionary.value(index))
+                    else:
+                        builder.append(dictionary.value(index))
                 else:
-                    builder.append(decoded.value(used))
+                    if kind == SchemaNode.ENUM:
+                        enum_builder.append_bytes(decoded.value(used))
+                    else:
+                        builder.append(decoded.value(used))
                 used += Int(valid)
                 output += 1
             levels.finish()
@@ -699,6 +716,8 @@ def _read_binary(
         return Column(schema_node.name(), BooleanColumn(count, bits^, bitmap^))
     if kind == SchemaNode.STRING:
         return Column(schema_node.name(), StringColumn(builder^.freeze()))
+    if kind == SchemaNode.ENUM:
+        return Column(schema_node.name(), enum_builder^.freeze())
     return Column(schema_node.name(), builder^.freeze())
 
 
@@ -773,12 +792,15 @@ def load_nested_table(
             or kind == SchemaNode.BINARY
             or kind == SchemaNode.FIXED_BINARY
             or kind == SchemaNode.STRING
+            or kind == SchemaNode.ENUM
         ):
             var column = _read_binary(
                 file, metadata, plan, i, counts[i], budget, page_limits
             )
             if kind == SchemaNode.STRING:
                 _charge(budget, column.string().binary().byte_size())
+            elif kind == SchemaNode.ENUM:
+                _charge(budget, column.enumeration().dictionary_byte_size() - 8)
             elif kind != SchemaNode.BOOLEAN:
                 _charge(budget, column.binary().byte_size())
             columns.append(column^)

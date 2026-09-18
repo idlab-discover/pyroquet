@@ -127,7 +127,10 @@ def load_table(
             var column = _load_binary_from_file(
                 file, metadata, index, leaves[i], budget + overhead, page_limits
             )
-            if kind != SchemaNode.BOOLEAN:
+            if kind == SchemaNode.ENUM:
+                # The empty label dictionary's terminal offset was preflighted.
+                budget -= column.enumeration().dictionary_byte_size() - 8
+            elif kind != SchemaNode.BOOLEAN:
                 budget -= column._binary_storage().byte_size()
             columns.append(column^)
             continue

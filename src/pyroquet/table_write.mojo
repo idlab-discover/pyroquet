@@ -149,6 +149,7 @@ def save_table(
                     setting.codec,
                     node.fixed_width(),
                     node.kind() == SchemaNode.STRING,
+                    node.kind() == SchemaNode.ENUM,
                 )
             )
         configured.append(numeric_options)

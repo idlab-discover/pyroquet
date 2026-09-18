@@ -411,7 +411,8 @@ lack of a fixed-width BLOB writer type. Unsupported comparisons are not passes.
 `SchemaNode.STRING` and `StringColumn` distinguish UTF-8 text from raw binary.
 Readers accept BYTE_ARRAY with modern STRING or, when no modern logical type is
 present, legacy UTF8. Writers emit both annotations. STRING on another physical
-type is rejected. ENUM and other logical byte annotations remain unsupported.
+type is rejected. ENUM has its own dictionary specialization described below;
+other logical byte annotations remain unsupported.
 
 ```mojo
 from pyroquet import StringBuilder, Column, SchemaNode
@@ -453,6 +454,72 @@ The fixture manifest and full parity results are retained in `build/strings/`.
 Reader-specific type or nested-data limitations are recorded explicitly and do
 not count as successful comparisons.
 
+## ENUM string dictionaries
+
+`SchemaNode.ENUM` preserves Parquet ENUM independently of STRING and independent
+of page encoding. Modern ENUM is authoritative; legacy ConvertedType ENUM is
+used only when the modern logical annotation is absent. Both require BYTE_ARRAY.
+`load_table` and the supported nested loader materialize ENUM as `EnumColumn`.
+
+```mojo
+from pyroquet import EnumBuilder, Column, SchemaNode
+
+var builder = EnumBuilder(row_count=4, max_output_bytes=1024)
+builder.append("blue")
+builder.append_null()
+builder.append("")
+builder.append("blue")
+var column = Column("color", builder^.freeze())
+print(column.enumeration().value(3))
+```
+
+Use `SchemaNode("color", SchemaNode.ENUM, 0, nullable=True)` for this column.
+`enumeration()` returns an immutable borrow; `labels()` borrows a `StringColumn`
+and `indices()` borrows `NumericColumn[DType.uint32]`. Its packed validity
+distinguishes null indices from index zero. `is_valid(row)` checks presence;
+`value(row)` returns an owned stdlib String and raises on null or out-of-range
+access. ENUM rejects ordinary `string()`, `binary()`, and `numeric[...]()` column
+borrows. `EnumColumn(labels^, indices^)` also accepts directly constructed storage
+and checks that labels are unique and non-null and all present indices are valid.
+The column is move-only; its numojo index allocation remains exclusively owned.
+
+The builder requires the final row count and consumes itself on `freeze()`.
+It interns exact UTF-8 bytes into one label arena, including empty strings and
+embedded NULs, without Unicode normalization. `max_labels` defaults to 2^32,
+covering the full UInt32 index range, and may be reduced explicitly. Allocation,
+cardinality and index bounds are checked even with compiler assertions disabled.
+The output-byte budget includes `4 * rows`, `ceil(rows / 8)` validity bytes,
+`8 * (labels + 1)` offset bytes and unique label bytes. Temporary hash keys and
+entries are bounded by unique payload/count but, like allocator spare capacity
+and page/codec workspaces, are outside that logical output budget.
+
+Reads accept PLAIN and existing dictionary encodings, including duplicate source
+dictionary entries, different dictionaries across row groups, and PLAIN fallback
+pages. Labels are merged by bytes into a column-wide dictionary as encountered;
+source dictionary IDs are never treated as globally stable codes. All source
+dictionary labels are UTF-8 validated, including unused ones. Writes resolve
+indices to labels and emit PLAIN BYTE_ARRAY with both ENUM annotations.
+
+Internal index order does not define value order: Parquet ENUM ordering is
+unsigned byte-wise ordering of the labels. There is no ordered categorical API,
+external code identity, complete vocabulary declaration, pandas/Arrow metadata
+serialization, or arbitrary category value type. A direct constructor may retain
+unused labels, but Parquet round trips do not promise their preservation or the
+same dictionary order. Dictionary-encoded STRING remains STRING. Delta byte-array
+encodings and dictionary page emission remain outside this implementation.
+
+```sh
+pixi run test-enums
+build/oracle-uv/bin/python tests/check_enum_ownership.py
+build/oracle-uv/bin/python tests/check_enum_nested_ownership.py
+pixi run mojo build -O3 -D ASSERT=none -I src -I ../NuMojo tests/test_enum_io.mojo -o build/test-enum-io-none
+build/oracle-uv/bin/python tests/enum_fixture_oracle.py --verify build/test-enum-io-none
+```
+
+Genuine ENUM fixture annotations, complete values, producer versions and oracle
+results are retained under `build/enums/`. Reader exposure as strings is
+spec-compliant; unsupported behavior and mismatches are explicit nonpasses.
+
 ## Nested STRUCT and primitive LIST tables
 
 `pyroquet.nested_io.load_nested_table` and
@@ -461,7 +528,7 @@ schema tree, typed `Column` leaves, and `NestedStructure` parent validity and LI
 offsets. Non-repeated STRUCTs may contain STRUCTs, primitive fields, or LISTs of
 primitives. Required/optional parents and elements are supported. Each leaf may
 have at most one repeated ancestor. Primitive support is the same ten numeric
-types, Boolean, unannotated raw binary, fixed binary, and STRING as flat tables.
+types, Boolean, unannotated raw binary, fixed binary, STRING, and ENUM as flat tables.
 MAP, LIST of LIST, LIST of STRUCT, and other new logical types remain unsupported.
 Annotated text is never treated as raw binary.
 

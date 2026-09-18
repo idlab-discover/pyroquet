@@ -24,6 +24,7 @@ struct SchemaNode(Copyable, Movable):
     comptime FIXED_BINARY = 13
     comptime LIST = 14
     comptime STRING = 15
+    comptime ENUM = 16
 
     var _name: String
     var _kind: Int
@@ -140,7 +141,7 @@ struct Schema(Copyable, Movable, Sized):
                 raise Error("Primitive schema node cannot have children")
             if (
                 nodes[i].kind() < SchemaNode.GROUP
-                or nodes[i].kind() > SchemaNode.STRING
+                or nodes[i].kind() > SchemaNode.ENUM
             ):
                 raise Error("Unsupported schema type")
             if nodes[i].kind() == SchemaNode.FIXED_BINARY:

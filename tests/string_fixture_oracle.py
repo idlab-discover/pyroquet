@@ -73,7 +73,7 @@ def wire(pages, rows, codec=0, annotation='both', physical=6):
     if annotation in ('both', 'modern', 'modern_wins'):
         schema[1].append((10,T.STRUCT,[(1,T.STRUCT,[])]))
     if annotation == 'other_modern':
-        schema[1].append((10,T.STRUCT,[(4,T.STRUCT,[])]))
+        schema[1].append((10,T.STRUCT,[(12,T.STRUCT,[])]))
     body = b''.join(p[0] for p in pages)
     raw_size = sum(p[1] for p in pages)
     data_offset = 4 + sum(len(p[0]) for p in pages[:1] if p[2] == 2)
@@ -173,9 +173,9 @@ def generate():
         path = OUT / f'invalid-physical-{physical}.parquet'
         path.write_bytes(wire([data([b'x'], b'\0' * 8, 1, 0)], 1, physical=physical))
         record(path, reject='STRING incompatible physical type')
-    path = OUT / 'invalid-legacy-utf8-modern-enum.parquet'
+    path = OUT / 'invalid-legacy-utf8-modern-json.parquet'
     path.write_bytes(wire([data([b'x'], plain([b'x']), 1, 0)], 1, annotation='other_modern'))
-    record(path, reject='modern ENUM takes precedence over legacy UTF8 and remains unsupported')
+    record(path, reject='modern JSON takes precedence over legacy UTF8 and remains unsupported')
     path = OUT / 'modern-string-legacy-enum.parquet'
     path.write_bytes(wire([data([b'x'], plain([b'x']), 1, 0)], 1, annotation='modern_wins'))
     record(path, ['x'])

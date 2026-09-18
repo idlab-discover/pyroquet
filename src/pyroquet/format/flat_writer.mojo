@@ -70,6 +70,7 @@ struct _WrittenField(Copyable, Movable):
     var codec: Int
     var fixed_width: Int
     var is_string: Bool
+    var is_enum: Bool
 
     def __init__(
         out self,
@@ -81,6 +82,7 @@ struct _WrittenField(Copyable, Movable):
         codec: Int,
         fixed_width: Int,
         is_string: Bool = False,
+        is_enum: Bool = False,
     ):
         self.name = name^
         self.physical = physical
@@ -90,6 +92,7 @@ struct _WrittenField(Copyable, Movable):
         self.codec = codec
         self.fixed_width = fixed_width
         self.is_string = is_string
+        self.is_enum = is_enum
 
 
 def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
@@ -104,11 +107,11 @@ def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
         _i32(writer, 2, field.fixed_width)
     _i32(writer, 3, 1 if nullable else 0)
     _string(writer, 4, name)
-    if field.is_string:
-        _i32(writer, 6, 0)  # UTF8 ConvertedType
+    if field.is_string or field.is_enum:
+        _i32(writer, 6, 4 if field.is_enum else 0)  # ENUM / UTF8
         writer.write_field(10, CompactType.STRUCT)  # LogicalType
         writer.begin_struct()
-        writer.write_field(1, CompactType.STRUCT)  # STRING
+        writer.write_field(4 if field.is_enum else 1, CompactType.STRUCT)
         writer.begin_struct()
         writer.end_struct()
         writer.end_struct()

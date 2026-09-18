@@ -9,6 +9,7 @@ from numojo.routines.creation import empty
 from .numeric_column import NumericColumn
 from .binary_column import BinaryColumn
 from .string_column import StringColumn
+from .enum_column import EnumColumn
 from .boolean_column import BooleanColumn
 from .schema import Schema, SchemaNode
 from .storage import FrozenBuffer
@@ -115,6 +116,7 @@ struct Column(Movable):
         BooleanColumn,
         BinaryColumn,
         StringColumn,
+        EnumColumn,
     ]
     var _dtype: DType
     var _kind: Int
@@ -165,6 +167,51 @@ struct Column(Movable):
         if self._kind != SchemaNode.STRING:
             raise Error("Column is not string")
         return self._data[StringColumn]
+
+    def __init__(out self, var name: String, var column: EnumColumn):
+        self._dtype = DType.uint32
+        self._kind = SchemaNode.ENUM
+        self._name = name^
+        self._size = len(column)
+        self._null_count = column.null_count()
+        self._data = column^
+
+    def enumeration(
+        self,
+    ) raises -> ref[origin_of(self._data[EnumColumn])] EnumColumn:
+        if self._kind != SchemaNode.ENUM:
+            raise Error("Column is not ENUM")
+        return self._data[EnumColumn]
+
+    def _byte_value(
+        self, row: Int
+    ) raises -> Span[
+        UInt8,
+        origin_of(
+            self._data[BinaryColumn]._bytes._owner,
+            self._data[StringColumn]._binary._bytes._owner,
+            self._data[EnumColumn]._labels._binary._bytes._owner,
+        ),
+    ]:
+        """Borrow physical value bytes without erasing the public logical type.
+        """
+        comptime Result = Span[
+            UInt8,
+            origin_of(
+                self._data[BinaryColumn]._bytes._owner,
+                self._data[StringColumn]._binary._bytes._owner,
+                self._data[EnumColumn]._labels._binary._bytes._owner,
+            ),
+        ]
+        if self._kind == SchemaNode.ENUM:
+            ref column = self.enumeration()
+            var index = column.indices().value(row)
+            if not index:
+                raise Error("Cannot borrow a null ENUM value")
+            return rebind[Result](
+                column.labels().binary().value(Int(index.value()))
+            )
+        return rebind[Result](self._binary_storage().value(row))
 
     def _binary_storage(
         self,

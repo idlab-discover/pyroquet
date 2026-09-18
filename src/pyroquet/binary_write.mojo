@@ -8,6 +8,38 @@ from .format.binary_values import encode_plain_binary
 from .format.boolean_values import encode_plain_boolean
 
 
+def _encode_plain_enum(
+    column: Column, start: Int, count: Int, max_bytes: Int
+) raises -> List[UInt8]:
+    """Resolve indices into bounded PLAIN pages without expanding the column."""
+    ref enumeration = column.enumeration()
+    if (
+        start < 0
+        or count < 0
+        or start > len(enumeration)
+        or count > len(enumeration) - start
+        or max_bytes < 0
+    ):
+        raise Error("Invalid ENUM encoding range or budget")
+    var total = 0
+    for i in range(start, start + count):
+        if enumeration.is_valid(i):
+            var width = len(column._byte_value(i))
+            if width > 2147483647 or 4 > max_bytes - total:
+                raise Error("ENUM page byte budget exceeded")
+            total += 4
+            if width > max_bytes - total:
+                raise Error("ENUM page byte budget exceeded")
+            total += width
+    var result = List[UInt8](capacity=total)
+    for i in range(start, start + count):
+        if enumeration.is_valid(i):
+            var bytes = column._byte_value(i)
+            _append_u32(result, UInt32(len(bytes)))
+            result.extend(bytes)
+    return result^
+
+
 def _binary_page(
     column: Column,
     start: Int,
@@ -34,6 +66,8 @@ def _binary_page(
                     var valid: Bool
                     if column.kind() == SchemaNode.BOOLEAN:
                         valid = Bool(column.boolean().value(start + index))
+                    elif column.kind() == SchemaNode.ENUM:
+                        valid = column.enumeration().is_valid(start + index)
                     else:
                         valid = column._binary_storage().is_valid(start + index)
                     if valid:
@@ -54,6 +88,10 @@ def _binary_page(
         if count // 8 + Int(count % 8 != 0) > max_bytes - level_bytes:
             raise Error("Boolean page exceeds byte budget")
         values = encode_plain_boolean(column.boolean(), start, count)
+    elif column.kind() == SchemaNode.ENUM:
+        values = _encode_plain_enum(
+            column, start, count, max_bytes - level_bytes
+        )
     else:
         values = encode_plain_binary(
             column._binary_storage(), start, count, max_bytes - level_bytes

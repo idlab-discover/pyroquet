@@ -9,6 +9,7 @@ from .format.boolean_values import decode_boolean_values
 from .format.flat_pages import _page_body, _flat_page_values
 from .binary_column import BinaryColumn, BinaryBuilder
 from .string_column import StringColumn, _validate_string_binary
+from .enum_column import EnumBuilder, _enum_overhead
 from .boolean_column import BooleanColumn
 from .table import Column
 from .schema import SchemaNode
@@ -22,6 +23,10 @@ def _binary_kind(node: SchemaElement) -> Int:
         node.logical_type == -1 and node.converted_type == 0
     ):
         return SchemaNode.STRING if node.physical_type == 6 else -1
+    if node.logical_type == 4 or (
+        node.logical_type == -1 and node.converted_type == 4
+    ):
+        return SchemaNode.ENUM if node.physical_type == 6 else -1
     if node.logical_type != -1 or node.converted_type != -1:
         return -1
     if node.physical_type == 0:
@@ -55,6 +60,10 @@ def _load_binary_from_file(
         bits.resize(bitmap_size, 0)
     var width = node.type_length if kind == SchemaNode.FIXED_BINARY else 0
     var builder = BinaryBuilder(max_output_bytes - overhead, width)
+    var enums = EnumBuilder(
+        rows if kind == SchemaNode.ENUM else 0,
+        max_output_bytes if kind == SchemaNode.ENUM else 8,
+    )
     var output = 0
     for group in metadata.row_groups:
         var dictionary = BinaryColumn([0], [])
@@ -87,7 +96,7 @@ def _load_binary_from_file(
                     width,
                     page_limits.max_page_bytes - (h.num_values + 1) * 8,
                 )
-                if kind == SchemaNode.STRING:
+                if kind == SchemaNode.STRING or kind == SchemaNode.ENUM:
                     _validate_string_binary(dictionary)
                 has_dictionary = True
                 continue
@@ -141,12 +150,21 @@ def _load_binary_from_file(
                             var index = Int(ids.next(payload))
                             if index >= len(dictionary):
                                 raise Error("Binary dictionary ID out of range")
-                            builder.append(dictionary.value(index))
+                            if kind == SchemaNode.ENUM:
+                                enums.append_bytes(dictionary.value(index))
+                            else:
+                                builder.append(dictionary.value(index))
                         else:
-                            builder.append(decoded.value(used))
+                            if kind == SchemaNode.ENUM:
+                                enums.append_bytes(decoded.value(used))
+                            else:
+                                builder.append(decoded.value(used))
                         used += 1
                     else:
-                        builder.append_null()
+                        if kind == SchemaNode.ENUM:
+                            enums.append_null()
+                        else:
+                            builder.append_null()
                 if indexed:
                     ids.finish()
             output += h.num_values
@@ -156,10 +174,14 @@ def _load_binary_from_file(
         return Column(node.name.copy(), BooleanColumn(rows, bits^, validity^))
     if kind == SchemaNode.STRING:
         return Column(node.name.copy(), StringColumn(builder^.freeze()))
+    if kind == SchemaNode.ENUM:
+        return Column(node.name.copy(), enums^.freeze())
     return Column(node.name.copy(), builder^.freeze())
 
 
 def _binary_overhead(rows: Int, kind: Int, max_output_bytes: Int) raises -> Int:
+    if kind == SchemaNode.ENUM:
+        return _enum_overhead(rows, max_output_bytes)
     if rows < 0 or max_output_bytes < 0:
         raise Error("Invalid binary budget")
     var bitmap_size = rows // 8 + Int(rows % 8 != 0)
