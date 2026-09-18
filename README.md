@@ -171,11 +171,13 @@ pixi run mojo run -I src -I ../NuMojo examples/load_numojo.mojo file.parquet col
 
 `pyroquet.numojo_io.load_numeric[dtype](path, column_name)` loads a named top-level
 numeric column across all row groups. It supports required/nullable columns, V1/V2 pages,
-uncompressed, Snappy or GZIP PLAIN and dictionary values, and RLE/bit-packed hybrid
+uncompressed, Snappy or GZIP PLAIN, dictionary and integer DELTA_BINARY_PACKED
+values, and RLE/bit-packed hybrid
 definition levels. Dictionary pages use PLAIN entries; data pages accept
 RLE_DICTIONARY and legacy PLAIN_DICTIONARY, including PLAIN fallback within a
 chunk. Names are literal, so `a.b` selects a top-level field named `a.b`. Other
-codecs, nested, encrypted, and non-numeric columns are explicitly unsupported.
+codecs, nested, encrypted, and non-numeric columns are unsupported by this
+flat entry point; use `load_nested_table` for the supported nested shapes.
 
 Choose a compile-time `DType`: `int8`, `uint8`, `int16`, `uint16`, `int32`,
 `uint32`, `int64`, `uint64`, `float32`, or `float64`. For example:
