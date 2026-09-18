@@ -17,6 +17,7 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 ORACLES = ('pyarrow', 'duckdb', 'fastparquet')
+EXCLUSIONS = Path(__file__).with_name('excluded_fixtures.json')
 
 
 def digest(path):
@@ -44,6 +45,26 @@ def discover(corpus):
                 if f.read(4) == b'PAR1':
                     result.append(path)
     return result
+
+
+def fixture_exclusion(relative, sha256, exclusions):
+    """A repaired or replaced fixture must not inherit an old exclusion."""
+    match = exclusions.get(relative)
+    return match if match and match['sha256'] == sha256 else None
+
+
+def excluded_record(relative, path, old, exclusion):
+    skipped = {'status': 'not_exercised', 'reason': 'excluded_invalid_fixture'}
+    return {'id': relative, 'role': 'standalone_file', 'fixture': artifact(path),
+            'selection': {'status': 'excluded_invalid_fixture', 'exclusion': exclusion},
+            'historical': historical_outcomes(old, exclusion['sha256']),
+            'adjudication': {'status': 'invalid_fixture', 'findings': exclusion['evidence'],
+                             'source': 'retained_exclusion_record; not reinvestigated'},
+            'footer': skipped.copy(), 'observed_features': [],
+            'numeric_replay': skipped.copy(),
+            'full_table': {'native': skipped.copy(),
+                           'oracles': {engine: skipped.copy() for engine in ORACLES}},
+            'write': skipped.copy()}
 
 
 def load_history(directory):
@@ -283,8 +304,13 @@ def actual_page_features(record):
 
 
 def summarize(records):
-    return {'files': len(records),
-            'file_bytes': sum(r['fixture']['bytes'] for r in records),
+    inventory = records
+    records = [r for r in inventory if r.get('selection', {}).get('status') != 'excluded_invalid_fixture']
+    return {'files': len(inventory),
+            'excluded_invalid_fixtures': len(inventory) - len(records),
+            'active_files': len(records),
+            'active_standalone_files': sum(r['role'] == 'standalone_file' for r in records),
+            'file_bytes': sum(r['fixture']['bytes'] for r in inventory),
             'roles': dict(Counter(r['role'] for r in records)),
             'historical_native': dict(Counter(r['historical'].get('comparisons', {}).get('next', {}).get('status', 'not_exercised') for r in records)),
             'adjudications': dict(Counter(r['adjudication']['status'] for r in records)),
@@ -311,7 +337,9 @@ def main():
     if args.replay_numeric and args.historical is None:
         ap.error('--replay-numeric requires --historical')
     tool_paths = sorted([*Path(__file__).parent.glob('*.py'), *Path(__file__).parent.glob('*.mojo')])
+    tool_paths.append(EXCLUSIONS)
     tool_sources = [artifact(p) for p in tool_paths]
+    exclusions = {f['path']: f for f in json.loads(EXCLUSIONS.read_text())['fixtures']}
     history, provenance = load_history(args.historical)
     paths = discover(args.corpus)
     if not paths:
@@ -341,11 +369,17 @@ def main():
     for number, path in enumerate(paths):
         relative = path.relative_to(args.corpus).as_posix()
         original_sha = digest(path)
+        exclusion = fixture_exclusion(relative, original_sha, exclusions)
+        if exclusion:
+            records.append(excluded_record(relative, path, history.get(str(path)), exclusion))
+            print(f'{number+1}/{len(paths)} EXCLUDED {relative}', flush=True)
+            (args.out / 'progress.json').write_text(json.dumps({'complete': False, 'files': records}, indent=2) + '\n')
+            continue
         case_out = args.out / 'cases' / relative
         case_out.mkdir(parents=True, exist_ok=True)
         role = 'dataset_summary' if path.name in ('_metadata', '_common_metadata') else 'standalone_file'
         old = history.get(str(path))
-        rec = {'id': relative, 'role': role, 'fixture': artifact(path),
+        rec = {'id': relative, 'role': role, 'selection': {'status': 'active'}, 'fixture': artifact(path),
                'historical': historical_outcomes(old, original_sha),
                'footer': footer_inventory(path), 'adjudication': first_blocker(old or {}),
                'full_table': {'native': {'status': 'not_exercised'},

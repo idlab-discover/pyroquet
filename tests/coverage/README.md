@@ -25,7 +25,7 @@ and binary hashes before using an exporter with a build record.
 `--corpus` defaults to `../fastparquet/test-data`. `--out` defaults to
 `build/coverage-ledger`; select a fresh output directory to retain separate runs.
 Discovery uses PAR1 magic, including extensionless files and dataset summaries.
-`--preserve-fixtures` copies every selected original into the output directory
+`--preserve-fixtures` copies every active selected original into the output directory
 and refuses to overwrite an existing copy with different bytes. Do not regard
 that directory as a collection of valid inputs: invalid and disputed files are
 preserved too.
@@ -53,6 +53,20 @@ inspection is recorded separately and does not imply metadata parity.
 Dataset summaries are inventoried without following external column references.
 They do not enter standalone full-table comparisons. Writer behavior is
 `not_exercised`: reading a producer's fixture does not establish Pyroquet writing.
+
+## Excluded invalid fixtures
+
+`excluded_fixtures.json` marks the 12 adjudicated invalid originals as excluded
+from active coverage, parity and benchmark selection. The ledger keeps their
+identity and prior findings, but skips footer/page investigation, native replay
+and oracle execution. Active summary counts omit them; exclusions are reported
+separately and never count as passes. Existing preserved copies remain archival.
+
+Exclusions require both relative path and SHA256. Replaced or repaired bytes
+become active again. `customer.impala.parquet` remains active because its RLE
+adjudication is unresolved. Other corpus consumers should use
+`fixture_exclusion()` with this same manifest before selecting workloads.
+Targeted malformed-input regression probes remain available separately.
 
 ## Dispositions and evidence
 

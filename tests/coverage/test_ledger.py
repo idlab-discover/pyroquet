@@ -4,7 +4,7 @@ import tempfile
 from pathlib import Path
 import unittest
 
-from ledger import adjudicate, discover, historical_outcomes, actual_page_features
+from ledger import adjudicate, discover, historical_outcomes, actual_page_features, fixture_exclusion, excluded_record, summarize
 
 
 class LedgerTests(unittest.TestCase):
@@ -14,6 +14,28 @@ class LedgerTests(unittest.TestCase):
             'engines': {'next': {'validation': {'exact_match': True, 'returncode': 0}},
                         'pyarrow': {'validation': {'exact_match': True, 'returncode': 0}}},
             'oracles': {'duckdb': {'returncode': 1}, 'fastparquet': {'exact_match': False, 'returncode': 0}}}}
+
+    def test_exclusion_requires_matching_path_and_hash(self):
+        record = {'path': 'bad.parquet', 'sha256': 'old', 'evidence': []}
+        exclusions = {'bad.parquet': record}
+        self.assertEqual(fixture_exclusion('bad.parquet', 'old', exclusions), record)
+        self.assertIsNone(fixture_exclusion('bad.parquet', 'repaired', exclusions))
+        self.assertIsNone(fixture_exclusion('other.parquet', 'old', exclusions))
+        self.assertIsNone(fixture_exclusion('customer.impala.parquet', 'old', exclusions))
+
+    def test_excluded_historical_pass_is_not_active_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'bad.parquet'
+            path.write_bytes(b'PAR1')
+            record = excluded_record('bad.parquet', path, self.history(),
+                                     {'sha256': 'original', 'evidence': []})
+            self.assertEqual(record['historical']['comparisons']['next']['status'], 'pass')
+            self.assertEqual(record['full_table']['native']['status'], 'not_exercised')
+            summary = summarize([record])
+            self.assertEqual(summary['excluded_invalid_fixtures'], 1)
+            self.assertEqual(summary['active_files'], 0)
+            self.assertEqual(summary['historical_native'], {})
+            self.assertEqual(summary['full_table_all_three_pass'], 0)
 
     def test_oracle_failures_survive_successful_native(self):
         result = historical_outcomes(self.history(), 'original')

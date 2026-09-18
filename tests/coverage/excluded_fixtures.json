@@ -1,0 +1,195 @@
+{
+  "version": 1,
+  "scope": "Exclude exact fixture bytes from active coverage, parity and benchmark selection; retain adjudication only.",
+  "fixtures": [
+    {
+      "path": "airlines_parquet/4345e5eef217aa1b-c8f16177f35fd983_1150363067_data.1.parq",
+      "sha256": "35ab8c93280a46557f2f148435a6cd9f043a3af0bb9b4e8d2561f93193f22bc5",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        },
+        {
+          "rule": "column_uncompressed_total_matches_page_headers_and_bodies",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:834",
+            "../parquet-format/src/main/thrift/parquet.thrift:925"
+          ],
+          "reason": "Column uncompressed size disagrees with page-header declared body sizes plus measured headers."
+        }
+      ]
+    },
+    {
+      "path": "decimals.parquet",
+      "sha256": "f5b0033fac18abe9cdb2f8e496240940ce5f009ac425926e38feb9c2b7d31fbc",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "gzip-nation.impala.parquet",
+      "sha256": "53e85d2623069319f82b6496f83452a732e4cc59533b7f0c9b140e7e02573b02",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "metas.parq",
+      "sha256": "2ea8c4662763c65f074a2583b1706f5db11bc73a2a5966a092104728e0156d20",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "multi_rgs_pyarrow/b=hi/a97cc141d16f4014a59e5b234dddf07c.parquet",
+      "sha256": "c2be98ee0b1fd673ab80d7567b94c4a7e632f4495aed34c724f344ac80dad1f9",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "multi_rgs_pyarrow/b=lo/01bc139247874a0aa9e0e541f2eec497.parquet",
+      "sha256": "f603e1c9ae9a2de1bb607a51261f4044329952ed08bbbf46a499243129393963",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "nation.dict.parquet",
+      "sha256": "245c025fe866c7a55612bf0848034e6cb7b33965668e9244bc007ab0eb61034d",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "nation.impala.parquet",
+      "sha256": "cad29596730c8b94f44ca12f23754394ca9455f0a5b2935e1cae36696e6ddf34",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "packed_run_has_all_declared_groups",
+          "spec_refs": [
+            "../parquet-format/Encodings.md:83-86",
+            "../parquet-format/Encodings.md:102-108"
+          ],
+          "reason": "Four width-five groups require 20 packed bytes; only 16 bytes remain."
+        }
+      ]
+    },
+    {
+      "path": "nation.plain.parquet",
+      "sha256": "fc5efe7b2ad51aea41430056aab505c5889541e30f83af8c2794613029942a52",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    },
+    {
+      "path": "non-std-kvm.fp-0.8.2.parquet",
+      "sha256": "9ad6fa450a3f4d29abcb500b9440d9835a397ec374dd72a72423e1342c8dc81c",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:699-707 (page num_values includes nulls)",
+            "../parquet-format/README.md:178-197 (nulls, page sections, no page padding)",
+            "../parquet-format/Encodings.md:50-67 (PLAIN widths)",
+            "../parquet-format/Encodings.md:94-144 (hybrid run grammar)"
+          ],
+          "interpretation": "PLAIN bytes exceed fixed-width count; page padding forbidden"
+        }
+      ]
+    },
+    {
+      "path": "repeated_no_annotation.parquet",
+      "sha256": "97d35acb9721e40fc0f66fba916a442c4a1cf77a35992dc891ad0cdcc5a24cfb",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "footer_rows_equal_sum_row_group_rows",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:1058",
+            "../parquet-format/src/main/thrift/parquet.thrift:1426"
+          ],
+          "reason": "File row count disagrees with row-group row counts."
+        }
+      ]
+    },
+    {
+      "path": "snappy-nation.impala.parquet",
+      "sha256": "4eed430b005bb4cc56fd8beea1328076c0a3f7c19ab3c2cac4bd3917e0b6b8dd",
+      "reason": "Confirmed specification violation; excluded by user decision.",
+      "evidence": [
+        {
+          "rule": "row_group_uncompressed_total_matches_columns",
+          "spec_refs": [
+            "../parquet-format/src/main/thrift/parquet.thrift:925",
+            "../parquet-format/src/main/thrift/parquet.thrift:1055"
+          ],
+          "reason": "Row-group uncompressed total disagrees with uncompressed column sizes; neither zero nor compressed-size substitution is specified."
+        }
+      ]
+    }
+  ]
+}
