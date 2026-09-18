@@ -1,6 +1,10 @@
 """Internal bounded Parquet codec seam; page framing stays with the caller."""
-from mojo_snappy import decode_snappy
-from .gzip import decode_gzip
+from mojo_snappy import (
+    decode_snappy,
+    encode_snappy,
+    snappy_max_compressed_length,
+)
+from .gzip import decode_gzip, encode_gzip
 
 
 def validate_codec(codec: Int) raises:
@@ -20,4 +24,22 @@ def decompress(
         return decode_snappy(data, expected, start)
     if codec == 2:
         return decode_gzip(data, expected, start)
+    raise Error("Expected a supported compressed codec")
+
+
+def compress(
+    codec: Int,
+    data: List[UInt8],
+    limit: Int,
+    start: Int = 0,
+    allow_expansion: Bool = False,
+) raises -> List[UInt8]:
+    """Encode a page section. V2 may stage bounded expansion before fallback."""
+    if codec == 1:
+        var bound = limit
+        if allow_expansion:
+            bound = snappy_max_compressed_length(len(data) - start)
+        return encode_snappy(data, bound, start)
+    if codec == 2:
+        return encode_gzip(data, limit, start, allow_expansion)
     raise Error("Expected a supported compressed codec")

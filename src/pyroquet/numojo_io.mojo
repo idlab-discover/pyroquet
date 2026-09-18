@@ -344,9 +344,10 @@ def load_numeric[
     """Load a named top-level numeric column across all row groups into NuMojo.
 
     One decoded allocation; bounded page-body buffers. The output budget covers
-    values plus validity, not metadata or page buffers. Non-Snappy codecs,
-    nested, encrypted and mismatched numeric columns are explicitly unsupported.
-    CRC verification is not yet implemented. Never returns partially filled data.
+    values plus validity, not metadata, page buffers or codec workspace. Codecs
+    other than UNCOMPRESSED/SNAPPY/GZIP, nested, encrypted and mismatched numeric
+    columns are unsupported. Parquet page CRC is not verified; GZIP integrity
+    checks are enforced. Never returns partially filled data.
     """
     _check_numeric[dtype]()
     if max_output_bytes < 0:

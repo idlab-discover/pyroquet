@@ -8,6 +8,7 @@ preview = ["pixi-build"]
 
 [tasks]
 generate-gzip-fixtures = "build/oracle-uv/bin/python tests/gzip_fixture_oracle.py --generate"
+test-gzip-writes = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_gzip_writes.mojo"
 test-gzip-reads = { cmd = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_gzip_reads.mojo", depends-on = ["generate-gzip-fixtures"] }
 test-packed-validity = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_packed_validity.mojo"
 test-packed-validity-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_packed_validity.mojo -o build/test-packed-validity && build/test-packed-validity"

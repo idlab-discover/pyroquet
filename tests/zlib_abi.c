@@ -18,7 +18,7 @@ int main(void) {
     void *handle = dlopen("libz.so.1", RTLD_NOW | RTLD_LOCAL);
     if (!handle) { fprintf(stderr, "%s\n", dlerror()); return 1; }
     const char *symbols[] = {"zlibVersion", "zlibCompileFlags", "inflateInit2_",
-        "inflate", "inflateReset", "inflateEnd", "deflateInit2_", "deflate",
+        "inflate", "inflateReset", "inflateReset2", "inflateEnd", "deflateInit2_", "deflate",
         "deflateBound", "deflateEnd"};
     for (unsigned i = 0; i < sizeof(symbols) / sizeof(symbols[0]); ++i) {
         if (!dlsym(handle, symbols[i])) {

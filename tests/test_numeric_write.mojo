@@ -234,7 +234,7 @@ def test_snappy_v2_fallback_and_v1_expansion_limit() raises:
             save_numeric[DType.int32](
                 directory + "/invalid.parquet",
                 column,
-                NumericWriteOptions(codec=2),
+                NumericWriteOptions(codec=3),
             )
         assert_equal(len(listdir(directory)), 0)
         save_numeric[DType.int32](

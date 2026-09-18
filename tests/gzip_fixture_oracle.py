@@ -120,9 +120,27 @@ def generate():
         encodings = {p.get('data_page_header', p.get('data_page_header_v2', {})).get('encoding') for p in scans}
         assert {0, 8} <= encodings, encodings
         records.append(item)
+    records.extend(float_payload_fixtures())
     manifest = dict(producer=f'PyArrow {pa.__version__}', fixtures=records, streams=stream_controls())
     (OUT / 'manifest.json').write_text(json.dumps(manifest, indent=2))
     print(f'Generated {len(records)} independent Parquet fixtures and stream controls')
+
+
+def float_payload_fixtures():
+    records = []
+    arrays = [
+        pa.Array.from_buffers(pa.float32(), 4, [pa.py_buffer(bytes([13])),
+            pa.py_buffer(struct.pack('<4I', 0x7FC12345, 0xDEADBEEF, 0x80000000, 0x7F800001))]),
+        pa.Array.from_buffers(pa.float64(), 4, [pa.py_buffer(bytes([13])),
+            pa.py_buffer(struct.pack('<4Q', 0x7FF8123456789ABC, 0xDEADBEEF, 0x8000000000000000, 0x7FF0000000000001))]),
+    ]
+    data = pa.Table.from_arrays(arrays, names=['f32', 'f64'])
+    for version in ('1.0', '2.0'):
+        path = OUT / f'v{version[0]}_float_payload.parquet'
+        pq.write_table(data, path, compression='gzip', use_dictionary=False,
+                       data_page_version=version, write_batch_size=4)
+        records.append(record(path, data))
+    return records
 
 
 def record(path, data):
@@ -160,8 +178,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(__doc__)
     parser.add_argument('--generate', action='store_true')
     parser.add_argument('--verify', type=Path)
+    parser.add_argument('--float-payload', action='store_true')
     args = parser.parse_args()
     if args.generate:
         generate()
+    if args.float_payload:
+        path = OUT / 'manifest.json'
+        manifest = json.loads(path.read_text())
+        manifest['fixtures'] = [r for r in manifest['fixtures'] if 'float_payload' not in r['path']] + float_payload_fixtures()
+        path.write_text(json.dumps(manifest, indent=2))
     if args.verify:
         verify(args.verify)

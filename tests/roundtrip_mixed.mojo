@@ -17,7 +17,8 @@ def main() raises:
             ColumnWriteOptions(
                 page_rows=7 + c * 3,
                 page_version=Int(args[3]),
-                codec=Int(args[4]) if Int(args[4]) >= 0 else c % 2,
+                codec=Int(args[4]) if Int(args[4])
+                >= 0 else c % (3 if Int(args[4]) == -2 else 2),
                 max_page_bytes=Int(args[6]) if len(args) > 6
                 and c == table.num_columns() - 1 else 1048576,
             )

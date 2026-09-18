@@ -52,11 +52,24 @@ bypasses decompression. Parquet's separate optional page CRC is not checked.
 
 Codec workspace is separate from page and retained-column budgets: inflate
 uses up to a 32 KiB window plus zlib state and a one-byte overflow probe. The
-adapter releases zlib state on every recoverable error. zlib allocation failure
+adapter releases zlib state on every recoverable error. Writing uses one member
+per compressed page stream, default zlib compression, a 32 KiB window and
+memLevel 8 (roughly 256 KiB compression workspace plus state). V1 compressed
+staging is capped by the page budget; V2 staging is bounded by `deflateBound`
+for the already bounded values section, and is discarded when it does not save
+space. Failed compression cannot publish a destination. Zlib allocation failure
 raises; Mojo collection allocation exhaustion follows the standard runtime's
 process-failure behavior, as existing page and column allocations do.
 `tests/check_zlib_abi.py` checks installed headers, C field offsets, initialization,
 symbols and the resolved library hash (requires development headers and a C compiler).
+
+After installing the development oracle requirements, run `pixi run test-gzip-reads`,
+`pixi run test-gzip-writes`, and
+`build/oracle-uv/bin/python tests/check_gzip_failures.py`. The read task generates
+independent PyArrow fixtures before running native checks. Three-reader evidence
+can be regenerated with `tests/gzip_fixture_oracle.py --verify READER` and
+`tests/check_gzip_writes.py --driver WRITER --reader READER`; use the current-source
+coverage exporter and `tests/roundtrip_mixed.mojo`, respectively.
 
 ## Development
 
@@ -207,7 +220,7 @@ decoded output.
 `pyroquet.numojo_write.save_numeric[dtype](path, column, options)` borrows a
 `NumericColumn[dtype]` and creates a new single-column Parquet file. It supports
 all ten numeric dtypes above, required/nullable columns, empty/all-null inputs,
-and multiple pages/row groups. Output uses UNCOMPRESSED or SNAPPY PLAIN V1/V2 with matching
+and multiple pages/row groups. Output uses UNCOMPRESSED, SNAPPY or GZIP PLAIN V1/V2 with matching
 modern/legacy integer annotations and null-count statistics. Numeric values,
 validity, row order, and floating bits are preserved; source layout and other
 metadata are not copied.
@@ -231,7 +244,7 @@ with unit stride. Saving borrows that storage without a full decoded-column copy
 | Option | Default | Meaning |
 |---|---:|---|
 | `page_version` | 1 | Data page format: 1 or 2; values remain PLAIN |
-| `codec` | 0 | Parquet compression: 0 (uncompressed) or 1 (native Snappy) |
+| `codec` | 0 | Parquet compression: 0 (uncompressed), 1 (native Snappy), or 2 (GZIP) |
 | `page_rows` | 65,536 | Maximum rows per page |
 | `row_group_rows` | 1,048,576 | Maximum rows per group |
 | `max_page_bytes` | 1 MiB | Conservative page-body allocation bound |
@@ -239,7 +252,7 @@ with unit stride. Saving borrows that storage without a full decoded-column copy
 | `max_row_groups` | 100,000 | Retained group-record count limit |
 
 V1 remains the default. V2 stores level lengths and page row/null counts in its
-header and omits the V1 four-byte level prefix. With `codec=1`, V1 compresses the
+header and omits the V1 four-byte level prefix. With `codec=1` or `codec=2`, V1 compresses the
 whole body; V2 compresses only values and keeps raw values when compression does
 not reduce their size. Both formats use the same numeric array and validity.
 Snappy encoding and decoding execute in Mojo without an external codec library.
@@ -252,7 +265,7 @@ the four-byte level prefix for nullable V1 pages only.
 Small header buffers and retained group records are accounted separately;
 footer memory grows with groups and column-name length. These are logical
 allocation limits, not an RSS ceiling. The encoded file is streamed page by page.
-For Snappy, `max_page_bytes` bounds each raw and stored body separately; compressed
+For Snappy and GZIP, `max_page_bytes` bounds each raw and stored body separately; compressed
 expansion may exceed the limit and fail the write. Codec workspace and simultaneous
 page buffers are additional memory. V2 reading also assembles levels and decoded
 values into a bounded page body; no additional full-column array is created.
@@ -339,7 +352,7 @@ build/oracle-uv/bin/python tests/check_numeric_dictionary.py
 `load_table` / `save_table` support `SchemaNode.BOOLEAN`, `BINARY`, and
 `FIXED_BINARY`, mixed with numeric columns. Reads accept PLAIN and binary
 PLAIN_DICTIONARY/RLE_DICTIONARY pages, plus RLE Boolean values, in V1/V2 with
-UNCOMPRESSED or SNAPPY. Writes emit PLAIN. STRING/UTF8 and other logical byte
+UNCOMPRESSED, SNAPPY or GZIP. Writes emit PLAIN. STRING/UTF8 and other logical byte
 annotations remain unsupported; raw bytes are never interpreted as text.
 
 `column.boolean().value(row)` returns `Optional[Bool]`. For binary columns,

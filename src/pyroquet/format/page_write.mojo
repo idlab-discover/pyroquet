@@ -5,13 +5,13 @@ implementation here depends only on physical page framing, never column storage.
 """
 from ..io import NewFile
 from .flat_writer import _plain_header
-from mojo_snappy import encode_snappy, snappy_max_compressed_length
+from ..compression import compress, validate_codec
 
 
 struct NumericWriteOptions(ImplicitlyCopyable):
-    """Codec 0 is uncompressed (default); codec 1 uses native Snappy.
+    """Codec 0 is uncompressed (default); 1 is native Snappy; 2 is GZIP.
 
-    max_page_bytes bounds each raw and stored page body separately. Snappy
+    max_page_bytes bounds each raw and stored page body separately. Codec
     staging additionally uses a bounded encoded buffer and encoder workspace.
     """
 
@@ -45,9 +45,9 @@ struct NumericWriteOptions(ImplicitlyCopyable):
         self.max_row_groups = max_row_groups
 
     def validate(self, physical_bytes: Int, rows: Int, nulls: Int) raises:
+        validate_codec(self.codec)
         if (
             (self.page_version != 1 and self.page_version != 2)
-            or (self.codec != 0 and self.codec != 1)
             or self.page_rows < 1
             or self.page_rows > 2147483647
             or self.row_group_rows < 1
@@ -94,18 +94,20 @@ def _write_page(
     var body_size = len(bytes)
     var compressed = List[UInt8]()
     var is_compressed = False
-    if options.codec == 1:
+    if options.codec != 0:
         if options.page_version == 1:
-            compressed = encode_snappy(bytes, options.max_page_bytes)
+            compressed = compress(options.codec, bytes, options.max_page_bytes)
             is_compressed = True
         else:
             var values_size = body_size - level_bytes
             # Permit expansion within a bounded temporary buffer, then
             # retain raw values when compression does not save space.
-            compressed = encode_snappy(
+            compressed = compress(
+                options.codec,
                 bytes,
-                snappy_max_compressed_length(values_size),
+                options.max_page_bytes,
                 level_bytes,
+                allow_expansion=True,
             )
             is_compressed = len(compressed) < values_size
     var stored_size = body_size
@@ -113,6 +115,8 @@ def _write_page(
         stored_size = len(compressed)
         if options.page_version == 2:
             stored_size += level_bytes
+    if stored_size > options.max_page_bytes:
+        raise Error("Stored page exceeds page byte limit")
     var header = _plain_header(
         page_rows,
         body_size,
