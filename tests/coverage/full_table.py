@@ -25,6 +25,9 @@ def _sources(root):
                      if not any(part in {'.pixi', 'build', '.git'} for part in path.parts))
     paths.extend(root / relative for relative in (
         'pixi.lock', 'pixi.toml', 'tests/coverage/read_table.mojo',
+        'tests/read_numeric.mojo',
+        '.pixi/envs/default/lib/libz.so.1',
+        '.pixi/envs/default/lib/libKGENCompilerRTShared.so',
         '.pixi/envs/default/lib/mojo/mojo_snappy.mojoc',
         '.pixi/envs/default/lib/mojo/std.mojoc'))
     return {str(path.resolve()): _hash(path) for path in sorted(paths)}
@@ -43,12 +46,12 @@ def _run(command, cwd=None):
         return dict(returncode=None, stdout='', stderr=str(exc), status='error')
 
 
-def build_reader(repo_root=ROOT, binary=None):
+def build_reader(repo_root=ROOT, binary=None, source="tests/coverage/read_table.mojo"):
     root = Path(repo_root).resolve()
     binary = Path(binary or root / 'build/coverage-ledger/read-table').resolve()
     binary.parent.mkdir(parents=True, exist_ok=True)
     command = ['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', '-I',
-               '../NuMojo', 'tests/coverage/read_table.mojo', '-o', str(binary)]
+               '../NuMojo', source, '-o', str(binary)]
     before = _sources(root)
     compiler = root / '.pixi/envs/default/bin/mojo'
     version_command = ['pixi', 'run', 'mojo', '--version']
@@ -142,13 +145,13 @@ def _arrow_export(table, nullable=None):
     return dict(rows=table.num_rows, columns=columns)
 
 
-def _fastparquet_export(path):
+def _fastparquet_export(path, columns=None):
     import fastparquet
     import numpy as np
     import pandas as pd
     with open(path, 'rb') as stream:
         file = fastparquet.ParquetFile(stream)
-        frame = file.to_pandas()
+        frame = file.to_pandas(columns=columns)
     columns, limitations = [], []
     for i, name in enumerate(frame.columns):
         series = frame.iloc[:, i]
@@ -196,7 +199,7 @@ def _oracle(engine, path):
         with duckdb.connect() as connection:
             connection.execute('SET threads=1')
             connection.execute('SET preserve_insertion_order=true')
-            table = connection.execute('SELECT * FROM read_parquet(?)', [path]).to_arrow_table()
+            table = connection.execute('SELECT * FROM read_parquet(?, hive_partitioning=false)', [path]).to_arrow_table()
             schema = connection.execute('SELECT name, repetition_type, type FROM parquet_schema(?)', [path]).fetchall()
             nullable = [row[1] == 'OPTIONAL' for row in schema if row[2] is not None]
         exported = _arrow_export(table, nullable)

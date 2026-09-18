@@ -100,3 +100,24 @@ a rejection, not full validity of unselected columns. Originals remain unchanged
 leaves `progress.json` with `complete: false`. The final `complete` flag means
 all discovered entries were processed; it does not turn unresolved rules,
 unexercised comparisons or known oracle limitations into successes.
+
+## Current GZIP numeric projections
+
+```sh
+build/oracle-uv/bin/python tests/coverage/current_numeric.py
+```
+
+This rebuilds `tests/read_numeric.mojo` from current source and compares every
+supported numeric GZIP column in active standalone golden files with fresh
+PyArrow, DuckDB and Fastparquet reads. Exact values, floating bits, null locations
+and row order are compared; the typed native loader validates the selected field's
+physical/logical type. Field nullability is selected from oracle metadata, not
+independently exported by this numeric probe. It does not certify other columns,
+whole-table loading or arbitrary metadata. Hash-matched excluded originals and
+external-reference dataset summaries are omitted explicitly. Results and build
+provenance are retained under `build/gzip-current-numeric/` by default.
+
+Current exporter provenance includes the pinned zlib and Mojo runtime library
+hashes alongside source/compiler/native-Snappy identities. Actual loader resolution
+can be audited using `tests/check_zlib_abi.py` and `LD_DEBUG=libs`; see the public
+GZIP setup documentation for deployed loader requirements.

@@ -37,6 +37,18 @@ class FullTableTests(unittest.TestCase):
             for oracle, outcome in result['oracles'].items():
                 self.assertEqual(outcome['status'], 'pass', (oracle, outcome))
 
+    def test_standalone_oracle_does_not_add_directory_partition_columns(self):
+        with tempfile.TemporaryDirectory() as directory:
+            partition = Path(directory) / 'category=outside_file'
+            partition.mkdir()
+            path = partition / 'data.parquet'
+            pq.write_table(pa.table({'n': pa.array([1, 2], pa.int32())}), path,
+                           compression='GZIP', use_dictionary=False)
+            table, limitations = module._oracle('duckdb', str(path))
+            self.assertEqual([column['name'] for column in table['columns']], ['n'])
+            self.assertEqual(table['columns'][0]['values'], [1, 2])
+            self.assertEqual(limitations, [])
+
     def test_null_nan_oracle_limitation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'nan.parquet'
