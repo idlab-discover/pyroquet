@@ -7,6 +7,7 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+test-nested-table = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_nested_table.mojo"
 test-delta = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_delta.mojo"
 test-delta-release = "mkdir -p build && mojo build -O3 -D ASSERT=all -I src -I ../NuMojo tests/test_delta.mojo -o build/test-delta-all && build/test-delta-all"
 test-delta-noassert = "mkdir -p build && mojo build -O3 -D ASSERT=none -I src -I ../NuMojo tests/test_delta.mojo -o build/test-delta-none && build/test-delta-none"

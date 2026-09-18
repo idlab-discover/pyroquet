@@ -22,6 +22,7 @@ struct SchemaNode(Copyable, Movable):
     comptime BOOLEAN = 11
     comptime BINARY = 12
     comptime FIXED_BINARY = 13
+    comptime LIST = 14
 
     var _name: String
     var _kind: Int
@@ -131,11 +132,14 @@ struct Schema(Copyable, Movable, Sized):
             var parent = nodes[i].parent()
             if parent < 0 or parent >= i:
                 raise Error("Schema parent must precede its child")
-            if nodes[parent].kind() != SchemaNode.GROUP:
+            if (
+                nodes[parent].kind() != SchemaNode.GROUP
+                and nodes[parent].kind() != SchemaNode.LIST
+            ):
                 raise Error("Primitive schema node cannot have children")
             if (
                 nodes[i].kind() < SchemaNode.GROUP
-                or nodes[i].kind() > SchemaNode.FIXED_BINARY
+                or nodes[i].kind() > SchemaNode.LIST
             ):
                 raise Error("Unsupported schema type")
             if nodes[i].kind() == SchemaNode.FIXED_BINARY:
@@ -158,6 +162,21 @@ struct Schema(Copyable, Movable, Sized):
                     and nodes[j]._name == nodes[i]._name
                 ):
                     raise Error("Duplicate sibling field name")
+        for i in range(1, len(nodes)):
+            if nodes[i].kind() == SchemaNode.LIST:
+                var children = 0
+                for j in range(i + 1, len(nodes)):
+                    if nodes[j].parent() == i:
+                        children += 1
+                        if (
+                            nodes[j].kind() == SchemaNode.GROUP
+                            or nodes[j].kind() == SchemaNode.LIST
+                        ):
+                            raise Error(
+                                "Only primitive LIST elements are supported"
+                            )
+                if children != 1:
+                    raise Error("LIST requires exactly one primitive element")
         self._nodes = FrozenBuffer(nodes^)
 
     def __len__(self) -> Int:
