@@ -12,11 +12,19 @@ Compact Protocol remains an independently buildable Mojo package.
 ## Snappy dependency
 
 Snappy is provided by the separate sibling project [`mojo-snappy`](../mojo-snappy/README.md),
-pinned to Mojo 1.0.0. `pixi.toml` declares `mojo-snappy = { path = "../mojo-snappy" }`;
+version **0.1.0**, using Mojo 1.0.0. The integration checkpoint is commit
+`ad02f439892d7b7813677d94f8e0951be63d0041`.
+`pixi.toml` declares `mojo-snappy = { path = "../mojo-snappy" }`;
 `pixi install --locked` builds and installs its `mojo_snappy` package. Keep that
 checkout alongside Pyroquet. The library owns raw codec implementation and codec
 tests; Pyroquet owns Parquet page integration and its three-reader parity tests.
 This local dependency uses Pixi's `pixi-build` preview feature.
+The path dependency does not pin the sibling's Git revision. Keep the checkout
+at the checkpoint above for reproducible integration checks, and run `pixi install`
+after changing it. `python tests/check_snappy_resolution.py` checks source/package
+resolution against that commit; it reports installed revision identity as unknown
+unless the installed and freshly precompiled package bytes match. Performance
+experiments must freeze the effective codec source separately.
 
 Run standalone codec checks from that project:
 

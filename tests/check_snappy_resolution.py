@@ -34,7 +34,8 @@ def sha(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--revision", default="a4c9440")
+    parser.add_argument("--revision", default="ad02f439892d7b7813677d94f8e0951be63d0041",
+                        help="Codec commit to verify (default: the 0.1.0 checkpoint)")
     parser.add_argument("--codec-repo", type=Path, default=ROOT.parent / "mojo-snappy")
     args = parser.parse_args()
     repo = args.codec_repo.resolve()
