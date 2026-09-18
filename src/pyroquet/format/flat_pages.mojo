@@ -4,6 +4,7 @@ Owns decompression, V1/V2 level framing and exact null-count validation.
 Typed materializers own values and dictionaries; no storage dependency here.
 """
 from .pages import PageHeader
+from std.bit import pop_count
 from mojo_snappy import decode_snappy
 
 
@@ -87,10 +88,28 @@ def _definition_levels(
                 used = count - written
                 if total - used > 7:
                     raise Error("Excess bit-packed definition levels")
-            for i in range(used):
-                if (bytes[pos + i // 8] >> UInt8(i % 8)) & 1:
-                    _set_valid(bitmap, output + written + i)
-                    present += 1
+            # Both wire levels and validity are LSB-first. Framing above
+            # bounds all run bytes; ceil(used / 8) <= run, so every load is
+            # inside the payload, with no padded-input overread. The caller
+            # bounds output + count by bitmap capacity and initializes the
+            # target bits to zero. OR preserves neighboring page/group bits.
+            var shift = (output + written) % 8
+            var dest = (output + written) // 8
+            var i = 0
+            while i < used:
+                var bits = bytes[pos + i // 8]
+                var take = min(8, used - i)
+                # Widen the mask so even take == 8 shifts by less than the
+                # operand width. Only logical rows enter the population count.
+                bits &= UInt8((UInt16(1) << UInt16(take)) - 1)
+                present += Int(pop_count(bits))
+                # shift is 0..7. A second byte exists iff logical bits cross
+                # its boundary; then 8-shift is 1..7, never a width-sized shift.
+                bitmap[dest] |= bits << UInt8(shift)
+                if take > 8 - shift:
+                    bitmap[dest + 1] |= bits >> UInt8(8 - shift)
+                dest += 1
+                i += take
             pos += run
             written += used
     if pos != end:
