@@ -209,7 +209,7 @@ def read_native(binary, path, projection=None):
 
 
 def compare(path, binary=None, projection=None):
-    table = pq.read_table(path)
+    table = pq.ParquetFile(path).read()
     schema = table.schema
     if projection:
         def selected(field, paths):
@@ -223,19 +223,46 @@ def compare(path, binary=None, projection=None):
         nodes, actual = read_native(binary, path, projection)
         result['native'] = 'pass' if nodes == schema_contract(schema) and actual == expected else dict(status='mismatch', schema_matches=nodes == schema_contract(schema), first_row=next((i for i, (a, b) in enumerate(zip(actual, expected)) if a != b), None), actual_rows=len(actual))
     try:
-        rel = duckdb.connect().execute('SELECT * FROM read_parquet(?)', [str(path)])
-        cols = [x[0] for x in rel.description]
-        duck = [{f.name: canonical(dict(zip(cols, row))[f.name], f.type) for f in schema} for row in rel.fetchall()]
-        result['duckdb'] = 'pass' if duck == expected else 'value_mismatch'
+        rel = duckdb.connect().execute('SELECT * FROM read_parquet(?, hive_partitioning=false)', [str(path)])
+        duck_table = rel.to_arrow_table()
+        cols = duck_table.column_names
+        duck = [{f.name: canonical(row[f.name], f.type) for f in schema} for row in duck_table.to_pylist()]
+        def compatible(actual, expected):
+            if pa.types.is_struct(expected):
+                return pa.types.is_struct(actual) and all(actual.get_field_index(f.name) >= 0 and compatible(actual.field(f.name).type,f.type) for f in expected)
+            if pa.types.is_list(expected):
+                return pa.types.is_list(actual) and compatible(actual.value_type,expected.value_type)
+            if pa.types.is_fixed_size_binary(expected):
+                return pa.types.is_binary(actual)
+            return actual == expected
+        type_ok = all(f.name in cols and compatible(duck_table.schema.field(f.name).type,f.type) for f in schema)
+        result['duckdb'] = 'pass' if duck == expected and type_ok else dict(status='mismatch',values_match=duck == expected,types_match=type_ok)
+        result['duckdb_schema'] = dict(actual=str(duck_table.schema), nullability='unavailable in SQL result metadata', fixed_binary_width='unavailable: DuckDB BLOB; byte values compared exactly')
     except Exception as error:
         result['duckdb'] = dict(status='reader_error', error=str(error))
-    # Fastparquet flattens STRUCTs and loses parent validity. Never reconstruct it
-    # by guessing all-null children; isolate its reader from native crashes.
+    # Fastparquet flattens STRUCTs and loses parent validity. Never infer it
+    # from child nullness. For representable flat/LIST values compare fully.
     script = "import sys,fastparquet; p=fastparquet.ParquetFile(sys.argv[1]); d=p.to_pandas(); print(d.columns.tolist())"
     fp = subprocess.run([sys.executable, '-c', script, str(path)], capture_output=True, text=True)
-    result['fastparquet'] = dict(status='unsupported_representation' if fp.returncode == 0 else 'reader_error',
-        reason='STRUCT flattening cannot preserve parent validity; not a parity pass', returncode=fp.returncode,
-        output=fp.stdout, error=fp.stderr)
+    if fp.returncode:
+        result['fastparquet'] = dict(status='reader_error', returncode=fp.returncode, error=fp.stderr)
+    elif any(pa.types.is_struct(f.type) for f in schema):
+        result['fastparquet'] = dict(status='unsupported_representation', reason='STRUCT flattening cannot preserve parent validity; not a parity pass', output=fp.stdout)
+    else:
+        try:
+            frame = fastparquet.ParquetFile(path).to_pandas()
+            def fp_value(value, typ):
+                if value is None or value is np.ma.masked or str(value) == '<NA>':
+                    return None
+                if pa.types.is_list(typ):
+                    if isinstance(value, (float, np.floating)) and np.isnan(value):
+                        return None
+                    return [fp_value(v, typ.value_type) for v in value]
+                return canonical(value, typ)
+            actual = [{f.name:fp_value(frame[f.name].iloc[i], f.type) for f in schema} for i in range(len(frame))]
+            result['fastparquet'] = 'pass' if actual == expected else 'value_mismatch'
+        except Exception as error:
+            result['fastparquet'] = dict(status='unsupported_representation', error=str(error))
     return result
 
 
@@ -281,6 +308,21 @@ def generate():
     return report
 
 
+def codecs(binary=None):
+    table = pq.ParquetFile(OUT/'nested-1.0-PLAIN.parquet').read()
+    report = []
+    for version in ('1.0','2.0'):
+        for codec in ('SNAPPY','GZIP'):
+            path = OUT/f'nested-{version}-{codec}.parquet'
+            options = dict(compression=codec,use_dictionary=True,data_page_version=version,data_page_size=512,write_batch_size=64,row_group_size=503)
+            pq.write_table(table,path,**options)
+            report.append(dict(path=str(path),sha256=hashlib.sha256(path.read_bytes()).hexdigest(),writer_options=options,pages=page_evidence(path),parity=compare(path,binary)))
+    (OUT/'codec-parity.json').write_text(json.dumps(report,indent=2)+'\n')
+    if binary:
+        assert all(e['parity']['native']=='pass' for e in report)
+    return report
+
+
 def corpus():
     results = []
     for name in ('foo.parquet', 'datapage_v2.snappy.parquet', 'nested1.parquet'):
@@ -297,6 +339,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--generate', action='store_true')
     parser.add_argument('--corpus', action='store_true')
+    parser.add_argument('--codecs', action='store_true')
     parser.add_argument('--binary', type=Path)
     parser.add_argument('--file', type=Path)
     parser.add_argument('--projection', help='JSON array of component-path arrays')
@@ -304,12 +347,14 @@ def main():
     if args.generate:
         report = generate()
         print('Generated', len(report['fixtures']), 'fixtures')
+    if args.codecs:
+        codecs(args.binary)
     if args.corpus:
         for entry in corpus():
             print(entry['path'], entry['sha256'], len(entry['pages']), 'data pages')
     if args.file:
         print(json.dumps(compare(args.file, args.binary, json.loads(args.projection) if args.projection else None), indent=2))
-    elif args.binary:
+    elif args.binary and not args.codecs:
         report = []
         for entry in json.loads((OUT / 'evidence.json').read_text())['fixtures']:
             path = ROOT / entry['path']
@@ -320,6 +365,7 @@ def main():
             report.append(dict(path=str(path), results=result))
             print(path.name, result.get('native'))
         (OUT / 'parity.json').write_text(json.dumps(report, indent=2) + '\n')
+        assert all(e['results'].get('native') == 'pass' for e in report), 'Unexpected native fixture outcome'
 
 
 if __name__ == '__main__':
