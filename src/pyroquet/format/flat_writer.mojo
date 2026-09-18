@@ -61,7 +61,6 @@ def _plain_header(
     return writer^.finish()
 
 
-@fieldwise_init
 struct _WrittenField(Copyable, Movable):
     var name: String
     var physical: Int
@@ -70,6 +69,27 @@ struct _WrittenField(Copyable, Movable):
     var nullable: Bool
     var codec: Int
     var fixed_width: Int
+    var is_string: Bool
+
+    def __init__(
+        out self,
+        var name: String,
+        physical: Int,
+        integer_width: Int,
+        signed: Bool,
+        nullable: Bool,
+        codec: Int,
+        fixed_width: Int,
+        is_string: Bool = False,
+    ):
+        self.name = name^
+        self.physical = physical
+        self.integer_width = integer_width
+        self.signed = signed
+        self.nullable = nullable
+        self.codec = codec
+        self.fixed_width = fixed_width
+        self.is_string = is_string
 
 
 def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
@@ -84,7 +104,15 @@ def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
         _i32(writer, 2, field.fixed_width)
     _i32(writer, 3, 1 if nullable else 0)
     _string(writer, 4, name)
-    if integer_width != 0:
+    if field.is_string:
+        _i32(writer, 6, 0)  # UTF8 ConvertedType
+        writer.write_field(10, CompactType.STRUCT)  # LogicalType
+        writer.begin_struct()
+        writer.write_field(1, CompactType.STRUCT)  # STRING
+        writer.begin_struct()
+        writer.end_struct()
+        writer.end_struct()
+    elif integer_width != 0:
         var index = 0
         var width = 8
         while width < integer_width:

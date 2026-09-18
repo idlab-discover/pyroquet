@@ -7,8 +7,52 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 PRELUDE = """from pyroquet.binary_column import BinaryColumn
 from pyroquet.string_column import StringColumn, StringBuilder
+from pyroquet import Column, Schema, SchemaNode, Table
+
+def table() raises -> Table:
+    var column = Column("text", StringColumn(BinaryColumn([0, 1], [65])))
+    return Table(Schema([SchemaNode("root", SchemaNode.GROUP, -1),
+                        SchemaNode("text", SchemaNode.STRING, 0)]), [column^], 1)
 """
 CASES = {
+    "valid_table_borrow": (True, """
+def main() raises:
+    var t = table()
+    print(t.column(0).string().value(0))
+    print(t.column(0)._binary_storage().value(0)[0])
+"""),
+    "table_escape_string": (False, """
+def escape() raises -> ref[ImmStaticOrigin] StringColumn:
+    var t = table()
+    return t.column(0).string()
+
+def main() raises:
+    print(escape().value(0))
+"""),
+    "table_mutate_bytes": (False, """
+def main() raises:
+    var t = table()
+    t.column(0).string().binary().value(0)[0] = 255
+"""),
+    "table_move_borrowed_string": (False, """
+def main() raises:
+    var t = table()
+    var column = t.column(0).string()^
+    print(column.value(0))
+"""),
+    "table_escape_binary_storage": (False, """
+def escape() raises -> Span[UInt8, ImmStaticOrigin]:
+    var t = table()
+    return t.column(0)._binary_storage().value(0)
+
+def main() raises:
+    print(escape()[0])
+"""),
+    "table_mutate_binary_storage": (False, """
+def main() raises:
+    var t = table()
+    t.column(0)._binary_storage().value(0)[0] = 255
+"""),
     "valid_owned_value": (True, """
 def materialize() raises -> String:
     var builder = StringBuilder()

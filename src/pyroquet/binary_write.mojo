@@ -35,7 +35,7 @@ def _binary_page(
                     if column.kind() == SchemaNode.BOOLEAN:
                         valid = Bool(column.boolean().value(start + index))
                     else:
-                        valid = column.binary().is_valid(start + index)
+                        valid = column._binary_storage().is_valid(start + index)
                     if valid:
                         packed |= UInt8(1) << UInt8(bit)
                     else:
@@ -56,7 +56,7 @@ def _binary_page(
         values = encode_plain_boolean(column.boolean(), start, count)
     else:
         values = encode_plain_binary(
-            column.binary(), start, count, max_bytes - level_bytes
+            column._binary_storage(), start, count, max_bytes - level_bytes
         )
     body.reserve(level_bytes + len(values))
     for byte in values:

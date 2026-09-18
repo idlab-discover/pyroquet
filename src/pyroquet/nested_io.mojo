@@ -31,6 +31,7 @@ from .numojo_io import (
 from .binary_io import _binary_kind
 from .numeric_column import NumericColumn
 from .binary_column import BinaryColumn, BinaryBuilder
+from .string_column import StringColumn, _validate_string_binary
 from .boolean_column import BooleanColumn
 from .schema import Schema, SchemaNode
 from .table import Column
@@ -70,7 +71,9 @@ def _leaf_overhead(kind: Int, count: Int, budget: Int) raises -> Int:
     ):
         width = 4
     var extra = Int(
-        kind == SchemaNode.BINARY or kind == SchemaNode.FIXED_BINARY
+        kind == SchemaNode.BINARY
+        or kind == SchemaNode.FIXED_BINARY
+        or kind == SchemaNode.STRING
     )
     if count > (budget - bytes) // width - extra:
         raise Error("Nested child allocation exceeds budget")
@@ -627,6 +630,8 @@ def _read_binary(
                     width,
                     limits.max_page_bytes - (h.num_values + 1) * 8,
                 )
+                if kind == SchemaNode.STRING:
+                    _validate_string_binary(dictionary)
                 has_dictionary = True
                 continue
             var framing = _page_counts(data, h, node)
@@ -692,6 +697,8 @@ def _read_binary(
         raise Error("Nested binary child count mismatch")
     if kind == SchemaNode.BOOLEAN:
         return Column(schema_node.name(), BooleanColumn(count, bits^, bitmap^))
+    if kind == SchemaNode.STRING:
+        return Column(schema_node.name(), StringColumn(builder^.freeze()))
     return Column(schema_node.name(), builder^.freeze())
 
 
@@ -765,11 +772,14 @@ def load_nested_table(
             kind == SchemaNode.BOOLEAN
             or kind == SchemaNode.BINARY
             or kind == SchemaNode.FIXED_BINARY
+            or kind == SchemaNode.STRING
         ):
             var column = _read_binary(
                 file, metadata, plan, i, counts[i], budget, page_limits
             )
-            if kind != SchemaNode.BOOLEAN:
+            if kind == SchemaNode.STRING:
+                _charge(budget, column.string().binary().byte_size())
+            elif kind != SchemaNode.BOOLEAN:
                 _charge(budget, column.binary().byte_size())
             columns.append(column^)
         else:

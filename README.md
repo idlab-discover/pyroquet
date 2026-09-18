@@ -312,7 +312,7 @@ An explicit empty `List[String]` selects zero columns while retaining the file
 row count. All footer structure and local chunk/index ranges are validated even
 for unselected fields. Only selected page bodies are decoded, so unsupported
 unselected types/codecs/encodings can be projected away. Selected nested or
-unsupported fields (including UTF-8/STRING) raise an error. CRCs are not checked.
+unsupported fields raise an error. CRCs are not checked.
 
 `Table(schema, columns, num_rows)` takes ownership of `List[Column]`; each
 `Column(NumericColumn[dtype])` moves its native allocation into a heterogeneous
@@ -354,8 +354,8 @@ build/oracle-uv/bin/python tests/check_numeric_dictionary.py
 `load_table` / `save_table` support `SchemaNode.BOOLEAN`, `BINARY`, and
 `FIXED_BINARY`, mixed with numeric columns. Reads accept PLAIN and binary
 PLAIN_DICTIONARY/RLE_DICTIONARY pages, plus RLE Boolean values, in V1/V2 with
-UNCOMPRESSED, SNAPPY or GZIP. Writes emit PLAIN. STRING/UTF8 and other logical byte
-annotations remain unsupported; raw bytes are never interpreted as text.
+UNCOMPRESSED, SNAPPY or GZIP. Writes emit PLAIN. Raw bytes are never inferred to
+be text; annotated STRING uses the distinct string API below.
 
 `column.boolean().value(row)` returns `Optional[Bool]`. For binary columns,
 `column.binary().is_valid(row)` distinguishes null from empty;
@@ -406,6 +406,53 @@ Boolean RLE interpretation, trailing NUL loss in fixed binary dictionaries,
 and surplus PLAIN writer padding; DuckDB short-stream hybrid padding and its
 lack of a fixed-width BLOB writer type. Unsupported comparisons are not passes.
 
+## UTF-8 string columns
+
+`SchemaNode.STRING` and `StringColumn` distinguish UTF-8 text from raw binary.
+Readers accept BYTE_ARRAY with modern STRING or, when no modern logical type is
+present, legacy UTF8. Writers emit both annotations. STRING on another physical
+type is rejected. ENUM and other logical byte annotations remain unsupported.
+
+```mojo
+from pyroquet import StringBuilder, Column, SchemaNode
+
+var builder = StringBuilder(max_bytes=1024)
+builder.append("hello")
+builder.append("λ\0")
+builder.append("")
+builder.append_null()
+var column = Column("text", builder^.freeze())
+print(column.string().value(1))
+```
+
+Pair this column with `SchemaNode("text", SchemaNode.STRING, 0, nullable=True)`.
+`column.string()` is an immutable typed borrow; `value(row)` returns an owned
+Mojo stdlib `String` and raises for nulls. Use `is_valid(row)` to distinguish null
+from empty text. `column.binary()` rejects strings, preserving logical identity.
+
+String storage shares the binary byte-arena, offsets, and packed-validity design;
+it does not allocate a String for every stored row. `StringColumn(binary^)`
+validates each value as UTF-8 before exposing it as text and rejects fixed-width
+binary storage. Validation never replaces malformed bytes or normalizes Unicode.
+Embedded NULs and empty strings are preserved. Dictionary entries are validated
+even when no row references them. Budgets follow the binary storage rules above.
+
+Flat and supported nested reads accept PLAIN and PLAIN_DICTIONARY/RLE_DICTIONARY,
+including changing row-group dictionaries and PLAIN fallback pages. Writes use
+PLAIN. DELTA_LENGTH_BYTE_ARRAY and DELTA_BYTE_ARRAY are explicitly unsupported.
+No categorical/ENUM semantics are inferred from dictionary encoding.
+
+```sh
+pixi run test-strings
+build/oracle-uv/bin/python tests/check_string_ownership.py
+pixi run mojo build -O3 -D ASSERT=none -I src -I ../NuMojo tests/test_string_io.mojo -o build/test-string-io
+build/oracle-uv/bin/python tests/string_fixture_oracle.py --verify build/test-string-io
+```
+
+The fixture manifest and full parity results are retained in `build/strings/`.
+Reader-specific type or nested-data limitations are recorded explicitly and do
+not count as successful comparisons.
+
 ## Nested STRUCT and primitive LIST tables
 
 `pyroquet.nested_io.load_nested_table` and
@@ -414,9 +461,9 @@ schema tree, typed `Column` leaves, and `NestedStructure` parent validity and LI
 offsets. Non-repeated STRUCTs may contain STRUCTs, primitive fields, or LISTs of
 primitives. Required/optional parents and elements are supported. Each leaf may
 have at most one repeated ancestor. Primitive support is the same ten numeric
-types, Boolean, unannotated raw binary, and fixed binary as flat tables.
-MAP, LIST of LIST, LIST of STRUCT, STRING/UTF8 and other new logical types remain
-unsupported. Annotated text is never treated as raw binary.
+types, Boolean, unannotated raw binary, fixed binary, and STRING as flat tables.
+MAP, LIST of LIST, LIST of STRUCT, and other new logical types remain unsupported.
+Annotated text is never treated as raw binary.
 
 A STRUCT child retains one slot per parent row; its slot is null when the parent
 is absent. LIST offsets address compact element slots, including null elements.

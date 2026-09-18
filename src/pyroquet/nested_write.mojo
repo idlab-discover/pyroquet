@@ -95,7 +95,7 @@ def _nested_field(
             )
             width = 0 if floating else size_of[Scalar[dtype]]() * 8
             signed = dtype.is_signed()
-    if node.kind() == SchemaNode.BINARY:
+    if node.kind() == SchemaNode.BINARY or node.kind() == SchemaNode.STRING:
         physical = 6
     elif node.kind() == SchemaNode.FIXED_BINARY:
         physical = 7
@@ -107,10 +107,13 @@ def _nested_field(
         node.nullable(),
         codec,
         node.fixed_width(),
+        node.kind() == SchemaNode.STRING,
     )
 
 
 def _nested_valid(column: Column, index: Int) raises -> Bool:
+    if column.kind() == SchemaNode.STRING:
+        return column.string().is_valid(index)
     if column.kind() == SchemaNode.BOOLEAN:
         return Bool(column.boolean().value(index))
     if column.kind() >= SchemaNode.BINARY:
@@ -149,8 +152,8 @@ def _nested_value(
         if column.boolean().value(index).value():
             bytes[len(bytes) - 1] |= UInt8(1) << UInt8(present % 8)
     elif column.kind() >= SchemaNode.BINARY:
-        var value = column.binary().value(index)
-        var prefix = 4 if column.kind() == SchemaNode.BINARY else 0
+        var value = column._binary_storage().value(index)
+        var prefix = 0 if column.kind() == SchemaNode.FIXED_BINARY else 4
         if len(value) > limit - len(bytes) - prefix:
             raise Error("Nested values exceed page byte budget")
         if prefix:

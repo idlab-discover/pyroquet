@@ -1,4 +1,4 @@
-"""Flat Boolean and raw binary materialization; annotated text stays unsupported."""
+"""Flat Boolean, raw binary and validated UTF-8 string materialization."""
 
 from std.io.file import FileHandle
 from .format.metadata import FileMetadata, SchemaElement
@@ -8,18 +8,21 @@ from .format.binary_values import decode_plain_binary
 from .format.boolean_values import decode_boolean_values
 from .format.flat_pages import _page_body, _flat_page_values
 from .binary_column import BinaryColumn, BinaryBuilder
+from .string_column import StringColumn, _validate_string_binary
 from .boolean_column import BooleanColumn
 from .table import Column
 from .schema import SchemaNode
 
 
 def _binary_kind(node: SchemaElement) -> Int:
-    if (
-        node.logical_type != -1
-        or node.converted_type != -1
-        or node.parent != 0
-        or node.max_repetition_level != 0
+    if node.parent != 0 or node.max_repetition_level != 0:
+        return -1
+    # LogicalType is authoritative; ConvertedType is a legacy fallback only.
+    if node.logical_type == 1 or (
+        node.logical_type == -1 and node.converted_type == 0
     ):
+        return SchemaNode.STRING if node.physical_type == 6 else -1
+    if node.logical_type != -1 or node.converted_type != -1:
         return -1
     if node.physical_type == 0:
         return SchemaNode.BOOLEAN
@@ -84,6 +87,8 @@ def _load_binary_from_file(
                     width,
                     page_limits.max_page_bytes - (h.num_values + 1) * 8,
                 )
+                if kind == SchemaNode.STRING:
+                    _validate_string_binary(dictionary)
                 has_dictionary = True
                 continue
             if h.num_values < 0 or h.num_values > rows - output:
@@ -149,6 +154,8 @@ def _load_binary_from_file(
         raise Error("Decoded binary row count mismatch")
     if kind == SchemaNode.BOOLEAN:
         return Column(node.name.copy(), BooleanColumn(rows, bits^, validity^))
+    if kind == SchemaNode.STRING:
+        return Column(node.name.copy(), StringColumn(builder^.freeze()))
     return Column(node.name.copy(), builder^.freeze())
 
 

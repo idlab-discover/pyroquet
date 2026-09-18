@@ -1,7 +1,7 @@
 """Deterministic raw-byte/Boolean fixtures and full-value three-reader checks.
 
 Run with build/oracle-uv/bin/python; generated files/manifests stay in build/.
-Seed 20260916. No UTF-8 capability is implemented or expected.
+Seed 20260916. STRING remains distinct from raw binary in typed access.
 """
 from pathlib import Path
 import hashlib
@@ -281,10 +281,10 @@ def main():
         assert result.returncode != 0
         verify_fast_padding(output, vals, name)
         RESULTS.append([output.name, 'fastparquet-write-native-read', 'invalid fixture', 'Surplus PLAIN padding verified independently'])
-    text_path = OUT / 'deferred-string.parquet'
+    text_path = OUT / 'typed-string.parquet'
     pq.write_table(pa.table({'raw': ['hello', 'é', None]}), text_path)
     rejected = subprocess.run([str(BINARY), str(text_path)], capture_output=True, text=True)
-    assert rejected.returncode != 0 and 'Selected field is not a supported flat column' in rejected.stdout + rejected.stderr
+    assert rejected.returncode != 0 and 'Column is not binary' in rejected.stdout + rejected.stderr
     manifest = {k: [v.hex() if isinstance(v, bytes) else v for v in vs] for k, vs in expected.items()}
     (OUT / 'manifest.json').write_text(json.dumps({'seed': 20260916, 'versions': {'pyarrow': pa.__version__, 'duckdb': duckdb.__version__, 'fastparquet': fastparquet.__version__}, 'values': manifest, 'sha256': {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in OUT.glob('*.parquet')}}, indent=2))
     (OUT / 'results.json').write_text(json.dumps(RESULTS, indent=2))

@@ -7,6 +7,14 @@ PRELUDE = '''from pyroquet.nested_table import NestedTable, NestedStructure
 from pyroquet.numeric_column import NumericColumn
 from pyroquet import Schema, SchemaNode, Column
 from numojo.routines.creation import empty
+from pyroquet.binary_column import BinaryColumn
+from pyroquet.string_column import StringColumn
+
+def string_table() raises -> NestedTable:
+    var column = Column("text", StringColumn(BinaryColumn([0, 1], [65])))
+    return NestedTable(Schema([SchemaNode("root", SchemaNode.GROUP, -1),
+                        SchemaNode("s", SchemaNode.GROUP, 0),
+                        SchemaNode("text", SchemaNode.STRING, 1)]), [column^], [NestedStructure(1)], 1)
 
 def table() raises -> NestedTable:
     var values = empty[DType.uint64]([1])
@@ -17,6 +25,28 @@ def table() raises -> NestedTable:
                         SchemaNode("x", SchemaNode.UINT64, 1)]), [column^], [NestedStructure(1)], 1)
 '''
 CASES = {
+    "string_valid_borrow": (True, '''def main() raises:
+    var t = string_table()
+    ref text = t.leaf(0).string()
+    print(text.value(0))
+    print(text.binary().value(0)[0])
+'''),
+    "string_mutate_bytes": (False, '''def main() raises:
+    var t = string_table()
+    var bytes = t.leaf(0).string().binary().value(0)
+    bytes[0] = 255
+'''),
+    "string_escape_column": (False, '''def escape() raises -> ref[ImmStaticOrigin] StringColumn:
+    var t = string_table()
+    return t.leaf(0).string()
+def main() raises:
+    print(escape().value(0))
+'''),
+    "string_move_borrowed_column": (False, '''def main() raises:
+    var t = string_table()
+    var text = t.leaf(0).string()^
+    print(text.value(0))
+'''),
     "valid": (True, '''def main() raises:
     var t = table()
     print(t.leaf(0).numeric[DType.uint64]().value(0).value())

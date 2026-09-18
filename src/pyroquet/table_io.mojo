@@ -128,7 +128,7 @@ def load_table(
                 file, metadata, index, leaves[i], budget + overhead, page_limits
             )
             if kind != SchemaNode.BOOLEAN:
-                budget -= column.binary().byte_size()
+                budget -= column._binary_storage().byte_size()
             columns.append(column^)
             continue
         comptime for t in range(len(types)):

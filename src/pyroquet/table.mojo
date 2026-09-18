@@ -8,6 +8,7 @@ from std.utils import Variant
 from numojo.routines.creation import empty
 from .numeric_column import NumericColumn
 from .binary_column import BinaryColumn
+from .string_column import StringColumn
 from .boolean_column import BooleanColumn
 from .schema import Schema, SchemaNode
 from .storage import FrozenBuffer
@@ -113,6 +114,7 @@ struct Column(Movable):
         NumericColumn[DType.float64],
         BooleanColumn,
         BinaryColumn,
+        StringColumn,
     ]
     var _dtype: DType
     var _kind: Int
@@ -148,6 +150,32 @@ struct Column(Movable):
 
     def kind(self) -> Int:
         return self._kind
+
+    def __init__(out self, var name: String, var column: StringColumn):
+        self._dtype = DType.uint8
+        self._kind = SchemaNode.STRING
+        self._name = name^
+        self._size = len(column)
+        self._null_count = column.null_count()
+        self._data = column^
+
+    def string(
+        self,
+    ) raises -> ref[origin_of(self._data[StringColumn])] StringColumn:
+        if self._kind != SchemaNode.STRING:
+            raise Error("Column is not string")
+        return self._data[StringColumn]
+
+    def _binary_storage(
+        self,
+    ) raises -> ref[
+        origin_of(self._data[StringColumn]._binary, self._data[BinaryColumn])
+    ] BinaryColumn:
+        """Internal shared byte storage; public borrows retain logical identity.
+        """
+        if self._kind == SchemaNode.STRING:
+            return self._data[StringColumn].binary()
+        return self.binary()
 
     def boolean(
         self,
@@ -218,7 +246,9 @@ struct Table(Movable):
         for i in range(len(columns)):
             var field = schema.node(i + 1)
             if field.parent() != 0 or field.kind() == SchemaNode.GROUP:
-                raise Error("Only flat primitive materialization is implemented")
+                raise Error(
+                    "Only flat primitive materialization is implemented"
+                )
             if field.kind() != columns[i].kind():
                 raise Error("Column dtype disagrees with schema")
             if (

@@ -74,6 +74,8 @@ struct NestedStructure(Copyable, Movable):
 
 
 def _column_valid(column: Column, row: Int) raises -> Bool:
+    if column.kind() == SchemaNode.STRING:
+        return column.string().is_valid(row)
     if column.kind() == SchemaNode.BOOLEAN:
         return Bool(column.boolean().value(row))
     if (

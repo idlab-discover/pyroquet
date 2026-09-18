@@ -148,6 +148,7 @@ def save_table(
                     node.nullable(),
                     setting.codec,
                     node.fixed_width(),
+                    node.kind() == SchemaNode.STRING,
                 )
             )
         configured.append(numeric_options)

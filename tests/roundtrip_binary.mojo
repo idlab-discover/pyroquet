@@ -39,6 +39,9 @@ def main() raises:
                     for byte in bytes:
                         line += " " + String(Int(byte))
                     print(line)
+            elif column.kind() == SchemaNode.STRING:
+                # This raw-binary driver intentionally rejects a text borrow.
+                _ = column.binary()
             else:
                 var value = column.numeric[DType.int32]().value(i)
                 if value:
