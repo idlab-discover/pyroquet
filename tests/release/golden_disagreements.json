@@ -1,0 +1,137 @@
+{
+  "status": "reviewed_disagreements_not_exclusions",
+  "fixtures": [
+    {
+      "path": "datapage_v2.snappy.parquet",
+      "sha256": "44f29191b5fa8cfe0ab848495bd8ef89344ac0d8f87b3dff12e267631e2b5c03",
+      "native_error": "Dictionary page offset disagrees with footer",
+      "evidence": [
+        {
+          "row_group": 0,
+          "column": 0,
+          "path": [
+            "a"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 4,
+          "observed_dictionary_offset": 4,
+          "observed_data_offset": 26
+        },
+        {
+          "row_group": 0,
+          "column": 2,
+          "path": [
+            "c"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 116,
+          "observed_dictionary_offset": 116,
+          "observed_data_offset": 153
+        },
+        {
+          "row_group": 0,
+          "column": 4,
+          "path": [
+            "e",
+            "list",
+            "element"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 243,
+          "observed_dictionary_offset": 243,
+          "observed_data_offset": 270
+        }
+      ],
+      "reason": "Declared first data-page offset points to a dictionary page; optional dictionary offset is absent. Strict reader rejection preserved.",
+      "spec_reference": "parquet-format/src/main/thrift/parquet.thrift:935-942"
+    },
+    {
+      "path": "nested.parq",
+      "sha256": "8bd06826e841bc39af48c287c02653fc44321496798af0b4899717dd38b0bbd2",
+      "native_error": "Dictionary page offset disagrees with footer",
+      "evidence": [
+        {
+          "row_group": 0,
+          "column": 0,
+          "path": [
+            "nest",
+            "thing",
+            "list",
+            "element"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 4,
+          "observed_dictionary_offset": 4,
+          "observed_data_offset": 34
+        }
+      ],
+      "reason": "Declared first data-page offset points to a dictionary page; optional dictionary offset is absent. Strict reader rejection preserved.",
+      "spec_reference": "parquet-format/src/main/thrift/parquet.thrift:935-942"
+    },
+    {
+      "path": "nested1.parquet",
+      "sha256": "0461ae3f1566d97df00d3f7c5bbde9c75a4b21df10515681d2211b41edb629af",
+      "native_error": "Dictionary page offset disagrees with footer",
+      "evidence": [
+        {
+          "row_group": 0,
+          "column": 2,
+          "path": [
+            "_adobe_corpnew",
+            "frequency"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 1382,
+          "observed_dictionary_offset": 1382,
+          "observed_data_offset": 1687
+        },
+        {
+          "row_group": 0,
+          "column": 3,
+          "path": [
+            "_adobe_corpnew",
+            "max_len"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 1838,
+          "observed_dictionary_offset": 1838,
+          "observed_data_offset": 1861
+        },
+        {
+          "row_group": 0,
+          "column": 4,
+          "path": [
+            "_adobe_corpnew",
+            "reduced_max_len"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 1935,
+          "observed_dictionary_offset": 1935,
+          "observed_data_offset": 1954
+        }
+      ],
+      "reason": "Declared first data-page offset points to a dictionary page; optional dictionary offset is absent. Strict reader rejection preserved.",
+      "spec_reference": "parquet-format/src/main/thrift/parquet.thrift:935-942"
+    },
+    {
+      "path": "test-null-dictionary.parquet",
+      "sha256": "c76035def2f2ff7df04e7ea218af11b2cd7859ff292f0840cf893502cc20751d",
+      "native_error": "Dictionary page offset disagrees with footer",
+      "evidence": [
+        {
+          "row_group": 0,
+          "column": 0,
+          "path": [
+            "foo"
+          ],
+          "declared_dictionary_offset": null,
+          "declared_data_offset": 4,
+          "observed_dictionary_offset": 4,
+          "observed_data_offset": 33
+        }
+      ],
+      "reason": "Declared first data-page offset points to a dictionary page; optional dictionary offset is absent. Strict reader rejection preserved.",
+      "spec_reference": "parquet-format/src/main/thrift/parquet.thrift:935-942"
+    }
+  ]
+}
