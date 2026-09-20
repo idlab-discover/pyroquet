@@ -1,5 +1,5 @@
 from std.testing import TestSuite, assert_equal, assert_raises, assert_true
-from std.tempfile import TemporaryDirectory
+from temp_directory import TestDirectory
 from std.os import listdir
 from pyroquet import Schema, SchemaNode, Table, Column
 from pyroquet.binary_column import BinaryBuilder, BinaryColumn
@@ -51,7 +51,7 @@ def _table(count: Int, mode: Int, width: Int = 0) raises -> Table:
 
 
 def test_complete_io_matrix() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var serial = 0
         for count in range(10):
             for mode in range(3):
@@ -113,7 +113,7 @@ def test_complete_io_matrix() raises:
 
 
 def test_projection_budget_and_typed_access() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var table = _table(9, 1)
         var path = directory + "/table.parquet"
         save_table(path, table)
@@ -134,7 +134,7 @@ def test_projection_budget_and_typed_access() raises:
 
 
 def test_late_oversized_page_cleanup() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var bytes = List[UInt8]()
         bytes.resize(100, 255)
         var table = Table(

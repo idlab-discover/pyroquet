@@ -1,6 +1,6 @@
 """Mixed writing retains schema, independent page ranges and atomic publication."""
 from std.os import listdir
-from std.tempfile import TemporaryDirectory
+from temp_directory import TestDirectory
 from std.testing import assert_equal, assert_raises, TestSuite
 from numojo.routines.creation import empty
 from pyroquet.schema import Schema, SchemaNode
@@ -37,7 +37,7 @@ def _mixed(rows: Int, nullable: Bool = True) raises -> Table:
 
 
 def test_mixed_independent_pages() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var table = _mixed(11)
         var settings: List[ColumnWriteOptions] = [
             ColumnWriteOptions(page_rows=2, page_version=1, codec=0),
@@ -60,7 +60,7 @@ def test_mixed_independent_pages() raises:
 
 
 def test_table_footer_failure_and_collision() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var table = _mixed(3)
         var path = directory + "/mixed.parquet"
         with assert_raises():
@@ -86,14 +86,15 @@ def test_table_footer_failure_and_collision() raises:
 
 
 def test_late_column_failure_cleans_staging() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var table = _mixed(1, False)
         var settings: List[ColumnWriteOptions] = [
             ColumnWriteOptions(),
-            ColumnWriteOptions(page_rows=1, codec=1, max_page_bytes=8),
+            ColumnWriteOptions(page_rows=1, codec=1, max_page_bytes=7),
         ]
-        # First column succeeds; second raw page fits but Snappy framing exceeds
-        # its bound, exercising cleanup after actual partial page emission.
+        # First column succeeds; the second eight-byte scalar exceeds its
+        # seven-byte raw-page bound. Repeated 0xff bytes can compress below
+        # eight bytes, so compressed size is not a reliable failure trigger.
         with assert_raises():
             save_table(
                 directory + "/late.parquet",
@@ -105,7 +106,7 @@ def test_late_column_failure_cleans_staging() raises:
 
 
 def test_empty_table_schema() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var table = _mixed(0)
         var path = directory + "/empty.parquet"
         save_table(path, table)

@@ -16,6 +16,15 @@ spec.loader.exec_module(module)
 
 
 class FullTableTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        evidence = module.ROOT / 'build/test-reliability'
+        evidence.mkdir(parents=True, exist_ok=True)
+        cls.evidence = Path(tempfile.mkdtemp(prefix='coverage-', dir=evidence))
+        cls.binary = cls.evidence / 'read-table'
+        module.build_reader(binary=cls.binary)
+        module.verify_reader(cls.binary)
+
     def test_export_names_null_empty_binary_and_float_bits(self):
         table = module.parse_native('2 2\n610a62\n12 1 0\nx\nnull\n66\n9 0 0\n2147483648\n2143289345\n')
         self.assertEqual(table['columns'][0]['name'], 'a\nb')
@@ -23,7 +32,7 @@ class FullTableTests(unittest.TestCase):
         self.assertEqual(table['columns'][1]['values'], [2147483648, 2143289345])
 
     def test_complete_mixed_table(self):
-        binary = module.ROOT / 'build/coverage-ledger/read-table'
+        binary = self.binary
         self.assertTrue(binary.exists(), 'Build the reader first')
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'mixed.parquet'
@@ -59,7 +68,7 @@ class FullTableTests(unittest.TestCase):
 
     def test_native_rejection_does_not_claim_oracle_pass(self):
         with tempfile.TemporaryDirectory() as directory:
-            result = module.inspect_full_table(Path(directory) / 'bad.parquet', module.ROOT / 'build/coverage-ledger/read-table', directory)
+            result = module.inspect_full_table(Path(directory) / 'bad.parquet', self.binary, directory)
             self.assertEqual(result['native']['status'], 'error')
             self.assertEqual({item['status'] for item in result['oracles'].values()}, {'not_exercised'})
 
@@ -68,7 +77,7 @@ class FullTableTests(unittest.TestCase):
             path = Path(directory) / 'fixed.parquet'
             pq.write_table(pa.table({'f': pa.array([b'\x00\xff', None], pa.binary(2))}), path,
                            compression='NONE', use_dictionary=False)
-            result = module.inspect_full_table(path, module.ROOT / 'build/coverage-ledger/read-table',
+            result = module.inspect_full_table(path, self.binary,
                                                Path(directory) / 'output')
             self.assertEqual(result['native']['status'], 'exported', result)
             self.assertEqual(result['oracles']['pyarrow']['status'], 'pass', result)
@@ -87,7 +96,7 @@ class FullTableTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             binary = Path(directory) / 'reader'
             binary.write_bytes(b'changed binary')
-            provenance = json.loads((module.ROOT / 'build/coverage-ledger/read-table.build.json').read_text())
+            provenance = json.loads(self.binary.with_suffix('.build.json').read_text())
             binary.with_suffix('.build.json').write_text(json.dumps(provenance))
             result = module.inspect_full_table(Path(directory) / 'input', binary, directory)
             self.assertEqual(result['native']['status'], 'provenance_error')

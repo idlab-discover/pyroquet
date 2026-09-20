@@ -1,7 +1,7 @@
 """Native writer ownership, resource limits and failure cleanup."""
 from std.memory import bitcast
 from std.os import listdir
-from std.tempfile import TemporaryDirectory
+from temp_directory import TestDirectory
 from std.testing import assert_equal, assert_raises, assert_true, TestSuite
 from numojo.routines.creation import empty
 from pyroquet.numojo_io import NumericColumn, load_numeric
@@ -10,7 +10,7 @@ from pyroquet.format import inspect_metadata, inspect_column_pages
 
 
 def test_borrowed_numeric_bits_and_validity() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.float64]([9])
         var address = Int(values.unsafe_ptr())
         for i in range(9):
@@ -48,7 +48,7 @@ def test_borrowed_numeric_bits_and_validity() raises:
 
 
 def test_writer_failure_cleans_staging() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.int16]([3])
         for i in range(3):
             values.unsafe_ptr()[unsafe_offset=i] = Int16(i)
@@ -86,7 +86,7 @@ def test_writer_failure_cleans_staging() raises:
 
 
 def test_required_rejects_nulls_and_empty_preserves_policy() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.uint8]([1])
         values.unsafe_ptr()[unsafe_offset=0] = 0
         var column = NumericColumn[DType.uint8](values^, [UInt8(0)], "x", 1)
@@ -113,7 +113,7 @@ def test_required_rejects_nulls_and_empty_preserves_policy() raises:
 
 
 def test_v2_headers_levels_and_page_null_counts() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.int8]([9])
         for i in range(9):
             values.unsafe_ptr()[unsafe_offset=i] = Int8(i - 4)
@@ -169,7 +169,7 @@ def test_v2_headers_levels_and_page_null_counts() raises:
 
 
 def test_snappy_page_sizes_and_group_totals() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.int64]([128])
         for i in range(128):
             values.unsafe_ptr()[unsafe_offset=i] = 42
@@ -218,7 +218,7 @@ def test_snappy_page_sizes_and_group_totals() raises:
 
 
 def test_snappy_v2_fallback_and_v1_expansion_limit() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.int32]([1])
         values.unsafe_ptr()[unsafe_offset=0] = 17
         var column = NumericColumn[DType.int32](values^, List[UInt8](), "x", 0)

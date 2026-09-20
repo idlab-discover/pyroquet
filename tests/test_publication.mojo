@@ -2,7 +2,7 @@
 
 from std.os import listdir, mkdir, remove, symlink
 from std.os.path import exists, islink
-from std.tempfile import TemporaryDirectory
+from temp_directory import TestDirectory
 from std.testing import (
     assert_equal,
     assert_false,
@@ -25,7 +25,7 @@ def _collision(path: String) raises:
 
 
 def test_publish_complete_bytes() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var target = directory + "/result"
         var output = NewFile(target)
         output.write_all([UInt8(1), 2])
@@ -44,13 +44,13 @@ def test_publish_complete_bytes() raises:
 
 
 def test_abandoned_write_cleanup() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         _abandon(directory + "/result")
         assert_equal(len(listdir(directory)), 0)
 
 
 def test_existing_file_unchanged() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var target = directory + "/result"
         var file = open(target, "w")
         var bytes: List[UInt8] = [7, 8]
@@ -65,7 +65,7 @@ def test_existing_file_unchanged() raises:
 
 
 def test_symlink_and_directory_collisions() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var target = directory + "/result"
         symlink(directory + "/missing", target)
         with assert_raises():
@@ -82,7 +82,7 @@ def test_symlink_and_directory_collisions() raises:
 
 
 def test_competing_publications() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var target = directory + "/result"
         var first = NewFile(target)
         var second = NewFile(target)
@@ -103,14 +103,14 @@ def _raise_during_write(path: String) raises:
 
 
 def test_exception_unwinds_and_cleans() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         with assert_raises():
             _raise_during_write(directory + "/result")
         assert_equal(len(listdir(directory)), 0)
 
 
 def test_publish_empty_file() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var target = directory + "/empty"
         var output = NewFile(target)
         output.write_all(List[UInt8]())
@@ -122,7 +122,7 @@ def test_publish_empty_file() raises:
 
 
 def test_invalid_paths() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         with assert_raises():
             var output = NewFile("")
         with assert_raises():

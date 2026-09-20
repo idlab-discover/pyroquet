@@ -2,7 +2,7 @@
 from std.sys import argv
 from std.time import perf_counter_ns
 from std.os import remove
-from std.tempfile import TemporaryDirectory
+from temp_directory import TestDirectory
 from std.testing import assert_equal
 from pyroquet.table_io import load_table
 from pyroquet.table_write import (
@@ -43,7 +43,7 @@ def main() raises:
         ColumnWriteOptions(page_rows=1024),
         ColumnWriteOptions(page_rows=1024),
     ]
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         for trial in range(7):
             var path = directory + "/output.parquet"
             if args[1] == "load":

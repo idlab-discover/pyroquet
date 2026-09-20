@@ -1,7 +1,7 @@
 """GZIP numeric ownership, bounded compression/fallback and publication failures."""
 from std.memory import bitcast
 from std.os import listdir
-from std.tempfile import TemporaryDirectory
+from temp_directory import TestDirectory
 from std.testing import TestSuite
 from numojo.routines.creation import empty
 from pyroquet.numojo_io import NumericColumn, load_numeric
@@ -10,7 +10,7 @@ from pyroquet.format import inspect_metadata, inspect_column_pages
 
 
 def test_numeric_gzip_bits_and_borrowed_ownership() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.float64]([9])
         var address = Int(values.unsafe_ptr())
         for i in range(9):
@@ -57,7 +57,7 @@ def test_numeric_gzip_bits_and_borrowed_ownership() raises:
 
 
 def test_gzip_compression_failure_and_v2_raw_fallback() raises:
-    with TemporaryDirectory() as directory:
+    with TestDirectory() as directory:
         var values = empty[DType.int32]([3])
         for i in range(3):
             values.unsafe_ptr()[unsafe_offset=i] = Int32(i)
