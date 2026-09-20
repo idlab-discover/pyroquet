@@ -25,7 +25,7 @@ from .format.delta import _DeltaDecoder
 from .format.flat_pages import _page_body, _flat_page_values, _u32
 
 
-from .numeric_column import NumericColumn, NumojoUInt32Column, _check_numeric
+from .numeric_column import NumericColumn, _check_numeric
 
 
 def _matches_numeric[dtype: DType](node: SchemaElement) -> Bool:
@@ -368,25 +368,6 @@ def _decode_numeric_page[
     )
 
 
-def _decode_plain_page[
-    dtype: DType
-](
-    bytes: List[UInt8],
-    h: PageHeader,
-    nullable: Bool,
-    mut values: NDArray[dtype],
-    mut bitmap: List[UInt8],
-    output: Int,
-) raises -> Int:
-    """PLAIN-only internal compatibility seam used by native tests."""
-    if h.encoding != 0:
-        raise Error("Expected PLAIN numeric encoding")
-    var dictionary = List[Scalar[dtype]]()
-    return _decode_numeric_page[dtype](
-        bytes, h, nullable, values, bitmap, output, dictionary, False
-    )
-
-
 def _plain_dictionary[
     dtype: DType
 ](bytes: List[UInt8], count: Int) raises -> List[Scalar[dtype]]:
@@ -545,16 +526,3 @@ def _load_numeric_from_file[
     if null_count == 0:
         validity = List[UInt8]()
     return NumericColumn[dtype](values^, validity^, node.name, null_count)
-
-
-def load_uint32(
-    path: String,
-    column_name: String,
-    max_output_bytes: Int = 1073741824,
-    page_limits: PageLimits = PageLimits(),
-    metadata_limits: CompactLimits = CompactLimits(),
-) raises -> NumojoUInt32Column:
-    """Compatibility shorthand for load_numeric[DType.uint32]."""
-    return load_numeric[DType.uint32](
-        path, column_name, max_output_bytes, page_limits, metadata_limits
-    )

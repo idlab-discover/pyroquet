@@ -13,7 +13,7 @@ OUT=ROOT/'build/numojo-checks'; BINARY=OUT/'read'
 FP_FAILURES=[]
 
 def probe(p,name='value',budget=None):
-    args=[str(BINARY),str(p),name]
+    args=[str(BINARY),'uint32',str(p),name]
     if budget is not None:args.append(str(budget))
     return subprocess.run(args,text=True,capture_output=True)
 
@@ -42,7 +42,7 @@ def compare(p, name='value'):
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    subprocess.run(['pixi','run','mojo','build','-O3','-D','ASSERT=all','-I','src','-I','../NuMojo','tests/read_numojo.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
+    subprocess.run(['pixi','run','mojo','build','-O3','-D','ASSERT=all','-I','src','-I','../NuMojo','tests/read_numeric.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
     paths=list((ROOT/'build/fixtures/uint32').glob('*.parquet'));assert len(paths)==9
     # Fastparquet writer.py appends 8 zero bytes to V1 bodies. Parquet README
     # forbids page padding. Keep these fixtures unchanged as explicit rejections.
@@ -78,8 +78,10 @@ def main():
     p=OUT/'dictionary.parquet'
     pq.write_table(pa.table({'value':pa.array([1,None,1,2**32-1],pa.uint32())}),p,compression='NONE',use_dictionary=True)
     count+=compare(p)
+    p=OUT/'gzip.parquet'
+    pq.write_table(pa.table({'value':pa.array([1],pa.uint32())}),p,compression='gzip',use_dictionary=False)
+    count+=compare(p)
     for name,kwargs,table in [
-      ('unsupported-compression',{'compression':'gzip','use_dictionary':False},pa.table({'value':pa.array([1],pa.uint32())})),
       ('signed',{'compression':'NONE','use_dictionary':False},pa.table({'value':pa.array([1],pa.int32())})),
       ('nested',{'compression':'NONE','use_dictionary':False},pa.table({'value':pa.array([[1]],pa.list_(pa.uint32()))})),
     ]:
@@ -109,5 +111,5 @@ def main():
     ]:bad_body(name,body)
     bad_body('required-truncated',b'\0'*11,False)
     (OUT/'oracle-limitations.json').write_text(json.dumps(FP_FAILURES,indent=2))
-    print(f'Matched {count} values/nulls across {len(paths)+2} files against PyArrow and DuckDB; fastparquet matched {len(paths)+2-len(FP_FAILURES)}, with {len(FP_FAILURES)} documented V2 oracle failures. Rejected 16 unsupported/malformed/budget cases and 2 padded fastparquet fixtures.')
+    print(f'Matched {count} values/nulls across {len(paths)+4} files against PyArrow and DuckDB; fastparquet matched {len(paths)+4-len(FP_FAILURES)}, with {len(FP_FAILURES)} documented V2 oracle failures. Rejected 14 unsupported/malformed/budget cases and 2 padded fastparquet fixtures.')
 if __name__=='__main__':main()

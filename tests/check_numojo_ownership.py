@@ -3,13 +3,13 @@ from pathlib import Path
 import subprocess
 from check_storage_ownership import ROOT
 
-PRELUDE='''from pyroquet.numojo_io import NumojoUInt32Column
+PRELUDE='''from pyroquet.numeric_column import NumericColumn
 from numojo.routines.creation import empty
 
-def column() raises -> NumojoUInt32Column:
+def column() raises -> NumericColumn[DType.uint32]:
     var values = empty[DType.uint32]([1])
     values.unsafe_ptr()[unsafe_offset=0] = 7
-    return NumojoUInt32Column(values^, List[UInt8](), "x", 0)
+    return NumericColumn[DType.uint32](values^, List[UInt8](), "x", 0)
 '''
 CASES={
 'valid':(True,'''def main() raises:
@@ -49,7 +49,7 @@ def main() raises:
 def main():
     out=ROOT/'build/numojo-ownership';out.mkdir(parents=True,exist_ok=True)
     for dtype in ('int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'float16', 'float32', 'float64'):
-      prelude = PRELUDE.replace('import NumojoUInt32Column', 'import NumericColumn').replace('NumojoUInt32Column', f'NumericColumn[DType.{dtype}]').replace('DType.uint32', f'DType.{dtype}')
+      prelude = PRELUDE.replace('DType.uint32', f'DType.{dtype}')
       for name,(valid,source) in CASES.items():
         name = dtype + '-' + name
         source = source.replace('Pointer[UInt32,', f'Pointer[Scalar[DType.{dtype}],')

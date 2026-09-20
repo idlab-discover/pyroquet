@@ -12,9 +12,7 @@ from std.sys import size_of
 from numojo.routines.creation import empty
 from numojo.core.ndarray import NDArray
 from pyroquet.numojo_io import (
-    NumojoUInt32Column,
     NumericColumn,
-    _decode_plain_page,
     _decode_numeric_page,
     _check_dictionary_header,
     _plain_value,
@@ -36,20 +34,27 @@ def _header(v2: Bool = False) -> PageHeader:
     return h
 
 
-def _make_column() raises -> NumojoUInt32Column:
+def _make_column() raises -> NumericColumn[DType.uint32]:
     var values = empty[DType.uint32]([3])
     var address = Int(values.unsafe_ptr())
     var bitmap: List[UInt8] = [0]
     # Three hybrid bit-packed definition levels: present, null, present.
     var bytes: List[UInt8] = [2, 0, 0, 0, 3, 5, 0, 0, 0, 0, 255, 255, 255, 255]
     assert_equal(
-        _decode_plain_page[DType.uint32](
-            bytes, _header(), True, values, bitmap, 0
+        _decode_numeric_page[DType.uint32](
+            bytes,
+            _header(),
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         ),
         1,
     )
     assert_equal(Int(values.unsafe_ptr()), address)
-    var result = NumojoUInt32Column(values^, bitmap^, "value", 1)
+    var result = NumericColumn[DType.uint32](values^, bitmap^, "value", 1)
     assert_equal(Int(result.values().unsafe_ptr()), address)
     return result^
 
@@ -74,14 +79,28 @@ def test_page_boundaries_share_one_bitmap_byte() raises:
     var bitmap: List[UInt8] = [0]
     var bytes: List[UInt8] = [3, 5, 1, 0, 0, 0, 2, 0, 0, 0]
     assert_equal(
-        _decode_plain_page[DType.uint32](
-            bytes, _header(True), True, values, bitmap, 0
+        _decode_numeric_page[DType.uint32](
+            bytes,
+            _header(True),
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         ),
         1,
     )
     assert_equal(
-        _decode_plain_page[DType.uint32](
-            bytes, _header(True), True, values, bitmap, 3
+        _decode_numeric_page[DType.uint32](
+            bytes,
+            _header(True),
+            True,
+            values,
+            bitmap,
+            3,
+            List[Scalar[DType.uint32]](),
+            False,
         ),
         1,
     )
@@ -94,8 +113,15 @@ def test_required_plain_and_exact_length() raises:
     var bitmap = List[UInt8]()
     var bytes: List[UInt8] = [0, 0, 0, 128, 255, 255, 255, 255, 0, 0, 0, 0]
     assert_equal(
-        _decode_plain_page[DType.uint32](
-            bytes, _header(), False, values, bitmap, 0
+        _decode_numeric_page[DType.uint32](
+            bytes,
+            _header(),
+            False,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         ),
         0,
     )
@@ -103,8 +129,15 @@ def test_required_plain_and_exact_length() raises:
     assert_equal(values.unsafe_ptr()[unsafe_offset=1], UInt32.MAX)
     bytes.append(0)
     with assert_raises():
-        _ = _decode_plain_page[DType.uint32](
-            bytes, _header(), False, values, bitmap, 0
+        _ = _decode_numeric_page[DType.uint32](
+            bytes,
+            _header(),
+            False,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         )
 
 
@@ -115,42 +148,79 @@ def test_rle_and_malformed_level_streams() raises:
     h.num_nulls = 3
     var all_null: List[UInt8] = [6, 0]
     assert_equal(
-        _decode_plain_page[DType.uint32](all_null, h, True, values, bitmap, 0),
+        _decode_numeric_page[DType.uint32](
+            all_null,
+            h,
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
+        ),
         3,
     )
     var invalid: List[UInt8] = [6, 2]
     with assert_raises():
-        _ = _decode_plain_page[DType.uint32](
-            invalid, h, True, values, bitmap, 0
+        _ = _decode_numeric_page[DType.uint32](
+            invalid,
+            h,
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         )
     var overflow: List[UInt8] = [255, 255, 255, 255, 31]
     h.definition_levels_byte_length = 5
     with assert_raises():
-        _ = _decode_plain_page[DType.uint32](
-            overflow, h, True, values, bitmap, 0
+        _ = _decode_numeric_page[DType.uint32](
+            overflow,
+            h,
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         )
     h = _header(True)
     h.num_nulls = 0
     with assert_raises():
-        _ = _decode_plain_page[DType.uint32](
-            all_null, h, True, values, bitmap, 0
+        _ = _decode_numeric_page[DType.uint32](
+            all_null,
+            h,
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
         )
     with assert_raises():
-        _ = _decode_plain_page[DType.uint32](
-            all_null, h, True, values, bitmap, 1
+        _ = _decode_numeric_page[DType.uint32](
+            all_null,
+            h,
+            True,
+            values,
+            bitmap,
+            1,
+            List[Scalar[DType.uint32]](),
+            False,
         )
 
 
 def test_column_validity_invariants() raises:
     with assert_raises():
         var v = empty[DType.uint32]([3])
-        _ = NumojoUInt32Column(v^, List[UInt8](), "x", 1)
+        _ = NumericColumn[DType.uint32](v^, List[UInt8](), "x", 1)
     with assert_raises():
         var v = empty[DType.uint32]([3])
-        _ = NumojoUInt32Column(v^, [UInt8(255)], "x", 0)
+        _ = NumericColumn[DType.uint32](v^, [UInt8(255)], "x", 0)
     with assert_raises():
         var v = empty[DType.uint32]([3])
-        _ = NumojoUInt32Column(v^, [UInt8(5)], "x", 0)
+        _ = NumericColumn[DType.uint32](v^, [UInt8(5)], "x", 0)
 
 
 def _numeric_case[dtype: DType]() raises:
@@ -165,8 +235,15 @@ def _numeric_case[dtype: DType]() raises:
     var bitmap: List[UInt8] = [0]
     for page in range(2):
         assert_equal(
-            _decode_plain_page[dtype](
-                bytes, _header(True), True, values, bitmap, page * 3
+            _decode_numeric_page[dtype](
+                bytes,
+                _header(True),
+                True,
+                values,
+                bitmap,
+                page * 3,
+                List[Scalar[dtype]](),
+                False,
             ),
             1,
         )
@@ -180,12 +257,26 @@ def _numeric_case[dtype: DType]() raises:
     var dest = empty[dtype]([3])
     var bits: List[UInt8] = [0]
     with assert_raises():
-        _ = _decode_plain_page[dtype](bytes, _header(True), True, dest, bits, 0)
+        _ = _decode_numeric_page[dtype](
+            bytes,
+            _header(True),
+            True,
+            dest,
+            bits,
+            0,
+            List[Scalar[dtype]](),
+            False,
+        )
     var h = _header(True)
     h.num_nulls = 3
     bits[0] = 0
     var nulls: List[UInt8] = [6, 0]
-    assert_equal(_decode_plain_page[dtype](nulls, h, True, dest, bits, 0), 3)
+    assert_equal(
+        _decode_numeric_page[dtype](
+            nulls, h, True, dest, bits, 0, List[Scalar[dtype]](), False
+        ),
+        3,
+    )
     var empty_values = empty[dtype]([0])
     var empty_column = NumericColumn[dtype](
         empty_values^, List[UInt8](), "x", 0

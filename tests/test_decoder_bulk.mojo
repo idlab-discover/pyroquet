@@ -5,7 +5,7 @@ from std.testing import assert_equal, assert_raises, TestSuite
 from numojo.routines.creation import empty
 from pyroquet.format import PageHeader
 from pyroquet.format.flat_pages import _flat_page_values
-from pyroquet.numojo_io import _decode_plain_page
+from pyroquet.numojo_io import _decode_numeric_page
 
 
 def _header(rows: Int, levels: Int, nulls: Int = 0) -> PageHeader:
@@ -69,7 +69,16 @@ def _numeric_paths[dtype: DType]() raises:
         if mode == 4:
             h.page_type = 0
         assert_equal(
-            _decode_plain_page[dtype](body, h, mode != 0, values, bitmap, 3),
+            _decode_numeric_page[dtype](
+                body,
+                h,
+                mode != 0,
+                values,
+                bitmap,
+                3,
+                List[Scalar[dtype]](),
+                False,
+            ),
             nulls,
         )
         assert_equal(Int(values.unsafe_ptr()), address)
@@ -131,13 +140,15 @@ def _float_paths[dtype: DType](patterns: List[UInt64]) raises:
         for _ in range((rows + 7) // 8):
             bitmap.append(0)
         assert_equal(
-            _decode_plain_page[dtype](
+            _decode_numeric_page[dtype](
                 body,
                 _header(rows, levels, len(patterns) * nullable),
                 Bool(nullable),
                 values,
                 bitmap,
                 0,
+                List[Scalar[dtype]](),
+                False,
             ),
             len(patterns) * nullable,
         )
@@ -253,7 +264,16 @@ def _reject_all_valid_claim(var body: List[UInt8], rows: Int) raises:
     var values = empty[DType.uint32]([rows])
     var bitmap: List[UInt8] = [0, 0, 0]
     with assert_raises():
-        _ = _decode_plain_page[DType.uint32](body, h, True, values, bitmap, 0)
+        _ = _decode_numeric_page[DType.uint32](
+            body,
+            h,
+            True,
+            values,
+            bitmap,
+            0,
+            List[Scalar[DType.uint32]](),
+            False,
+        )
 
 
 def test_all_valid_metadata_does_not_bypass_level_validation() raises:
@@ -276,8 +296,15 @@ def test_narrow_plain_still_rejects_out_of_range_all_present() raises:
         var body: List[UInt8] = [2, 1]
         _append_bits(body, UInt64(Scalar[dtype].MAX) + 1, 4)
         with assert_raises():
-            _ = _decode_plain_page[dtype](
-                body, _header(1, 2), True, values, bitmap, 0
+            _ = _decode_numeric_page[dtype](
+                body,
+                _header(1, 2),
+                True,
+                values,
+                bitmap,
+                0,
+                List[Scalar[dtype]](),
+                False,
             )
 
 

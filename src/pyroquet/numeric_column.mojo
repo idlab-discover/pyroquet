@@ -82,10 +82,6 @@ struct NumericColumn[dtype: DType](Movable):
         return self._values.unsafe_ptr()[unsafe_offset=index]
 
 
-# Compatibility names share the parameterized implementation.
-comptime NumojoUInt32Column = NumericColumn[DType.uint32]
-
-
 def _check_numeric[dtype: DType]():
     comptime assert (
         dtype == DType.int8

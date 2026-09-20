@@ -47,13 +47,6 @@ struct SchemaElement(Copyable, Movable):
     def is_group(self) -> Bool:
         return self.physical_type == -1
 
-    def is_uint32(self) -> Bool:
-        return (
-            self.physical_type == 1
-            and self.integer_width == 32
-            and not self.integer_signed
-        )
-
     def nullable(self) -> Bool:
         """Whether this field itself is OPTIONAL; ancestors may also be null."""
         return self.repetition == 1

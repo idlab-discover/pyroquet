@@ -6,8 +6,6 @@ from pyroquet import (
     Schema,
     SchemaNode,
     Table,
-    UInt32Chunk,
-    UInt32Column,
 )
 
 
@@ -18,97 +16,6 @@ def flat_schema(nullable: Bool = True) raises -> Schema:
             SchemaNode("value", SchemaNode.UINT32, 0, nullable),
         ]
     )
-
-
-def retained_column() raises -> UInt32Column:
-    var column = UInt32Column(
-        [
-            UInt32Chunk([0, 2147483647, 0], [UInt8(3)]),
-            UInt32Chunk([2147483648, UInt32.MAX, 1]),
-            UInt32Chunk(List[UInt32]()),
-            UInt32Chunk([0], [UInt8(0)]),
-        ]
-    )
-    return column^
-
-
-def test_nullable_extrema_and_retained_column() raises:
-    var column = retained_column()
-    assert_equal(len(column), 7)
-    assert_equal(column.num_chunks(), 4)
-    assert_equal(column.null_count(), 2)
-    assert_equal(column.value(0).value(), UInt32(0))
-    assert_equal(column.value(1).value(), UInt32(2147483647))
-    assert_true(not column.value(2))
-    assert_equal(column.value(3).value(), UInt32(2147483648))
-    assert_equal(column.value(4).value(), UInt32.MAX)
-    assert_equal(column.value(5).value(), UInt32(1))
-    assert_true(not column.value(6))
-    with assert_raises():
-        _ = column.value(7)
-    with assert_raises():
-        _ = column.value(-1)
-    with assert_raises():
-        _ = column.chunk(4)
-
-
-def test_independent_chunks_and_zero_column_rows() raises:
-    var schema = Schema(
-        [
-            SchemaNode("schema", SchemaNode.GROUP, -1),
-            SchemaNode("a", SchemaNode.UINT32, 0),
-            SchemaNode("b", SchemaNode.UINT32, 0),
-        ]
-    )
-    var table = Table(
-        schema^,
-        [
-            UInt32Column([UInt32Chunk([1]), UInt32Chunk([2, 3])]),
-            UInt32Column([UInt32Chunk([4, 5, 6])]),
-        ],
-        3,
-    )
-    assert_equal(table.column(0).value(2).value(), UInt32(3))
-    assert_equal(table.column(1).value(2).value(), UInt32(6))
-    assert_equal(table.num_columns(), 2)
-    var empty_projection = Table(
-        Schema([SchemaNode("schema", SchemaNode.GROUP, -1)]),
-        List[UInt32Column](),
-        17,
-    )
-    assert_equal(empty_projection.num_columns(), 0)
-    assert_equal(empty_projection.num_rows(), 17)
-    var empty = Table(flat_schema(), [UInt32Column(List[UInt32Chunk]())], 0)
-    assert_equal(empty.num_rows(), 0)
-
-
-def test_nullable_bitmap_shape() raises:
-    var chunk = UInt32Chunk([0, 0, 0, 0, 0, 0, 0, 0, 42], [UInt8(0), 1])
-    assert_equal(chunk.null_count(), 8)
-    assert_equal(chunk.value(8).value(), UInt32(42))
-    with assert_raises():
-        _ = UInt32Chunk([1], [UInt8(1), 0])
-    with assert_raises():
-        _ = UInt32Chunk([1], [UInt8(255)])
-    with assert_raises():
-        _ = UInt32Chunk(List[UInt32](), [UInt8(0)])
-    with assert_raises():
-        _ = chunk.value(9)
-
-
-def test_table_shape_and_required_field() raises:
-    with assert_raises():
-        _ = Table(
-            flat_schema(False),
-            [UInt32Column([UInt32Chunk([0], [UInt8(0)])])],
-            1,
-        )
-    with assert_raises():
-        _ = Table(flat_schema(), [UInt32Column([UInt32Chunk([1])])], 2)
-    with assert_raises():
-        _ = Table(flat_schema(), List[UInt32Column](), 0)
-    with assert_raises():
-        _ = Table(flat_schema(), [UInt32Column(List[UInt32Chunk]())], -1)
 
 
 def test_schema_hierarchy_and_literal_dots() raises:
@@ -129,11 +36,11 @@ def test_schema_hierarchy_and_literal_dots() raises:
         _ = Table(
             schema^,
             [
-                UInt32Column(List[UInt32Chunk]()),
-                UInt32Column(List[UInt32Chunk]()),
-                UInt32Column(List[UInt32Chunk]()),
+                single_column[DType.uint32]("a"),
+                single_column[DType.uint32]("b"),
+                single_column[DType.uint32]("a.b"),
             ],
-            0,
+            1,
         )
 
 
@@ -263,6 +170,18 @@ def single_column[
 
 
 def test_mixed_schema_invariants() raises:
+    with assert_raises():
+        _ = Table(flat_schema(), List[Column](), 0)
+    with assert_raises():
+        _ = Table(flat_schema(), [single_column[DType.uint32]("value")], -1)
+    var values = empty[DType.uint32]([0])
+    var zero_rows = Table(
+        flat_schema(),
+        [Column(NumericColumn(values^, List[UInt8](), "value", 0))],
+        0,
+    )
+    assert_equal(zero_rows.num_rows(), 0)
+    assert_equal(zero_rows.num_columns(), 1)
     with assert_raises():
         _ = Table(flat_schema(), [single_column[DType.uint32]("wrong")], 1)
     with assert_raises():

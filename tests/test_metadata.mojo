@@ -604,7 +604,9 @@ def test_flat_schema_and_chunk() raises:
     assert_equal(m.schema[0].parent, -1)
     assert_equal(m.schema[1].parent, 0)
     assert_true(m.schema[1].nullable())
-    assert_true(m.schema[1].is_uint32())
+    assert_equal(m.schema[1].physical_type, 1)
+    assert_equal(m.schema[1].integer_width, 32)
+    assert_false(m.schema[1].integer_signed)
     assert_equal(m.schema[1].max_definition_level, 1)
     assert_equal(m.schema[1].max_repetition_level, 0)
     assert_equal(m.row_groups[0].columns[0].schema_index, 1)
@@ -636,11 +638,10 @@ def test_annotation_precedence_and_unknown() raises:
     assert_equal(m.schema[1].logical_type, 10)
     assert_equal(m.schema[1].integer_width, 32)
     assert_true(m.schema[1].integer_signed)
-    assert_false(m.schema[1].is_uint32())
     var future = parse_metadata(_unknown())
     assert_equal(future.schema[1].logical_type, 99)
     assert_equal(future.schema[1].physical_type, 1)
-    assert_false(future.schema[1].is_uint32())
+    assert_equal(future.schema[1].integer_width, 0)
 
 
 def test_invalid_schema_and_path() raises:
