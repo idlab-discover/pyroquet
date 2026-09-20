@@ -27,6 +27,7 @@ def _sources(root):
         'pixi.lock', 'pixi.toml', 'tests/coverage/read_table.mojo',
         'tests/read_numeric.mojo',
         '.pixi/envs/default/lib/libz.so.1',
+        '.pixi/envs/default/lib/libzstd.so.1',
         '.pixi/envs/default/lib/libKGENCompilerRTShared.so',
         '.pixi/envs/default/lib/mojo/mojo_snappy.mojoc',
         '.pixi/envs/default/lib/mojo/std.mojoc'))

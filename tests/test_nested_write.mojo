@@ -20,7 +20,7 @@ from pyroquet.table_write import TableWriteOptions, ColumnWriteOptions
 def test_write_nested() raises:
     var table = make_table()
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var path = (
                 "build/nested-write-v"
                 + String(version)

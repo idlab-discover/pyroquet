@@ -1,0 +1,88 @@
+{
+  "limitations": [
+    {
+      "fixture": "v2-mixed-False.parquet",
+      "sha256": "bd5fc8006b72b5144912a4026c647158d744473105b1806006347504ce75d088",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "IndexError: boolean index did not match indexed array along axis 0; size of axis is 48 but size of corresponding boolean axis is 113",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "b185d49368972451f72ea49f4ecec83f909797a13d46b12264b9c3cdb52b73aa",
+      "control_columns": null
+    },
+    {
+      "fixture": "v2-mixed-False-native.parquet",
+      "sha256": "aa26b3d52d26e298ca6dcad147d4492a7e9735dce5939de1d982b87360809ffa",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "IndexError: boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 61",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "4560f8724cdc54c2974d5d5828189ef89e5ad63fa47beeefa7109c9826fa5fed",
+      "control_columns": null
+    },
+    {
+      "fixture": "v2-mixed-True.parquet",
+      "sha256": "3a21a1187c10410a0bdcf6b8203acac8e13c0c366f48f7cd8bc6f5b7d4985cbe",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "IndexError: boolean index did not match indexed array along axis 0; size of axis is 16 but size of corresponding boolean axis is 113",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "3b091d3cc2b868d79527c981e3ae45f62d112c5da7eb4d53a1391b9f99b2a6ce",
+      "control_columns": null
+    },
+    {
+      "fixture": "v2-mixed-True-native.parquet",
+      "sha256": "aa26b3d52d26e298ca6dcad147d4492a7e9735dce5939de1d982b87360809ffa",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "IndexError: boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 61",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "4560f8724cdc54c2974d5d5828189ef89e5ad63fa47beeefa7109c9826fa5fed",
+      "control_columns": null
+    },
+    {
+      "fixture": "v2-all_null-False.parquet",
+      "sha256": "0135771e70e46ff2c663fec22fae5a7cbe4cdcfca8473025b376b4d607df425e",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "ValueError: NumPy boolean array indexing assignment cannot assign 33 input values to the 0 output values where the mask is true",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "04ee14ec9fa69b834dc71b6a7a42ef4fd502c95b1fd6396c337bf1e045938137",
+      "control_columns": [
+        "flag"
+      ]
+    },
+    {
+      "fixture": "v2-all_null-False-native.parquet",
+      "sha256": "f9d4c78d663d20b6ad8af16ccc2342cce9087cd7317225c6853939a497fce9a9",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "IndexError: boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 33",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "c3848a48cdf0e4b8ba8d63e0ace0379bb393c6828ba2ac6004f32cca13df6376",
+      "control_columns": null
+    },
+    {
+      "fixture": "v2-all_null-True.parquet",
+      "sha256": "b61e54d18d145d1acfdfaa84bd95193759d9c00970c53ad3c03d62a9d55b6d0c",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "ValueError: NumPy boolean array indexing assignment cannot assign 33 input values to the 0 output values where the mask is true",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "b63e640fe71492480a5d2d3dce16dfc46064489b65bbd38ae7e68eca7f9c2468",
+      "control_columns": [
+        "flag"
+      ]
+    },
+    {
+      "fixture": "v2-all_null-True-native.parquet",
+      "sha256": "f9d4c78d663d20b6ad8af16ccc2342cce9087cd7317225c6853939a497fce9a9",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "IndexError: boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 33",
+      "reason": "Fastparquet V2 nullable destination mask/BOOL assignment mismatch; same error reproduced with UNCOMPRESSED storage.",
+      "control_sha256": "c3848a48cdf0e4b8ba8d63e0ace0379bb393c6828ba2ac6004f32cca13df6376",
+      "control_columns": null
+    }
+  ]
+}

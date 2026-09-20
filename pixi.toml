@@ -7,6 +7,8 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+check-zstd = "build/oracle-uv/bin/python tests/check_zstd.py"
+test-zstd = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_zstd.mojo"
 test-numeric-mutation = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_mutation.mojo"
 test-failure-propagation = "python tests/check_test_failures.py"
 test-enum-column = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_enum_column.mojo"
@@ -79,6 +81,7 @@ format = "mojo format src tests examples"
 mojo-snappy = { path = "../mojo-snappy" }
 mojo = "==1.0.0"
 libzlib = "==1.3.2"
+zstd = "==1.5.7"
 
 [activation.env]
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"

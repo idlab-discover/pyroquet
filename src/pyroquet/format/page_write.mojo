@@ -9,7 +9,7 @@ from ..compression import compress, validate_codec
 
 
 struct NumericWriteOptions(ImplicitlyCopyable):
-    """Codec 0 is uncompressed (default); 1 is native Snappy; 2 is GZIP.
+    """Codec 0 is uncompressed (default); 1 is native Snappy; 2 is GZIP; 6 is ZSTD.
 
     max_page_bytes bounds each raw and stored page body separately. Codec
     staging additionally uses a bounded encoded buffer and encoder workspace.

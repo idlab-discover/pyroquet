@@ -57,7 +57,7 @@ def test_complete_io_matrix() raises:
             for mode in range(3):
                 for width in [0, 1, 2, 3, 16]:
                     for version in range(1, 3):
-                        for codec in range(2):
+                        for codec in [0, 1, 2, 6]:
                             var table = _table(count, mode, width)
                             var path = (
                                 directory + "/" + String(serial) + ".parquet"

@@ -5,11 +5,14 @@ from mojo_snappy import (
     snappy_max_compressed_length,
 )
 from .gzip import decode_gzip, encode_gzip
+from .zstd import decode_zstd, encode_zstd
 
 
 def validate_codec(codec: Int) raises:
-    if codec != 0 and codec != 1 and codec != 2:
-        raise Error("Only UNCOMPRESSED, SNAPPY and GZIP columns are supported")
+    if codec != 0 and codec != 1 and codec != 2 and codec != 6:
+        raise Error(
+            "Only UNCOMPRESSED, SNAPPY, GZIP and ZSTD columns are supported"
+        )
 
 
 def decompress(
@@ -24,6 +27,8 @@ def decompress(
         return decode_snappy(data, expected, start)
     if codec == 2:
         return decode_gzip(data, expected, start)
+    if codec == 6:
+        return decode_zstd(data, expected, start)
     raise Error("Expected a supported compressed codec")
 
 
@@ -42,4 +47,6 @@ def compress(
         return encode_snappy(data, bound, start)
     if codec == 2:
         return encode_gzip(data, limit, start, allow_expansion)
+    if codec == 6:
+        return encode_zstd(data, limit, start, allow_expansion)
     raise Error("Expected a supported compressed codec")
