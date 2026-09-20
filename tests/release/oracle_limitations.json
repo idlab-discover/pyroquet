@@ -1,0 +1,941 @@
+{
+  "scope": "Reviewed exact generated fixture disagreements; never parity passes. Revalidate controls on every use.",
+  "fixtures": [
+    {
+      "path": "small-flat-v1-c0-d1-allnull.parquet",
+      "sha256": "72dafb0d21837ab900c76d137d34470844c296babc7f719b53809609b7543069",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "int8",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int8",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int8",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int8",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 3,
+          "error": "an integer is required"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-flat-v1-c1-d1-allnull.parquet",
+          "sha256": "9b23737d22343e40cbdf9259921e9620178239d2e88a38fb53da95d3f6470619"
+        }
+      ]
+    },
+    {
+      "path": "small-nested-v1-c0-d1-allnull.parquet",
+      "sha256": "b29d4ff7b47451287b672670a1c7deac755086e2a7cc22ad04f274214f63b9e5",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "items",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "items",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "items",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "items",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 3,
+          "error": "an integer is required"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-nested-v1-c1-d1-allnull.parquet",
+          "sha256": "81b67317f5a3fa0596df4c71b6f54d602d0543ef00d8a95dfa1dec287102ce46"
+        }
+      ]
+    },
+    {
+      "path": "small-enum-v1-c0-d1-allnull.parquet",
+      "sha256": "58938cc046bec9790b45b0babfbcc9acbf417a077b899a7a2cc1a48894843cb4",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "label",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "label",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "label",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "label",
+          "row_group": 3,
+          "error": "an integer is required"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-enum-v1-c1-d1-allnull.parquet",
+          "sha256": "1f6fe7390bad5c33e24b2502c752122b54402cc59e57a2d1287c54f58172acac"
+        }
+      ]
+    },
+    {
+      "path": "small-nested-v2-c0-d1-required.parquet",
+      "sha256": "4c9a92e78d752d4ad37e16531310890ef56445bcfee83ee22673394a8cfb3d0c",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "items",
+          "row_group": 2,
+          "local_rows": [
+            2,
+            6,
+            10,
+            14,
+            18,
+            22,
+            26,
+            30
+          ],
+          "error": "LIST null locations differ"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-nested-v2-c0-d1-required.parquet",
+          "sha256": "4c9a92e78d752d4ad37e16531310890ef56445bcfee83ee22673394a8cfb3d0c"
+        },
+        {
+          "path": "small-nested-v1-c0-d1-required.parquet",
+          "sha256": "654ad43d265dd06ce3bebbf9bfce401372d8f5ab7745c20e75f441c530826d58"
+        }
+      ]
+    },
+    {
+      "path": "small-flat-v2-c0-d1-allnull.parquet",
+      "sha256": "ec4b1d5861d2ac6387afe4655d184e5a223d10579a50cf80b17b9afb532ba5c6",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "int8",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int8",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int8",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int8",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint8",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int16",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint16",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int32",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint32",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "int64",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "uint64",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "halffloat",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "float",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "double",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "text",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "raw",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "fixed",
+          "row_group": 3,
+          "error": "an integer is required"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-flat-v2-c1-d1-allnull.parquet",
+          "sha256": "647a0bae900e3b6fc5eebfc49804a4f62d5da74682116fa2a37fe927e038abbe"
+        }
+      ]
+    },
+    {
+      "path": "small-nested-v2-c0-d1-allnull.parquet",
+      "sha256": "7da026fc9ddda1e87fe142fa2fec8f7bfc5fc2641ecbb34c3c0c39884dc3140c",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "items",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "items",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "items",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "items",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.number",
+          "row_group": 3,
+          "error": "an integer is required"
+        },
+        {
+          "column": "record.text",
+          "row_group": 3,
+          "error": "an integer is required"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-nested-v2-c1-d1-allnull.parquet",
+          "sha256": "ea50fbbcb78351765d24f281bdc48d6ea970385a958180f098c9d2f3c88b65fd"
+        }
+      ]
+    },
+    {
+      "path": "small-enum-v2-c0-d1-allnull.parquet",
+      "sha256": "d8bf8240c01dce18eac76f092f13e9b28ccee9ccaa18eb66cf1d8451bc2eb5c8",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "label",
+          "row_group": 0,
+          "error": "an integer is required"
+        },
+        {
+          "column": "label",
+          "row_group": 1,
+          "error": "an integer is required"
+        },
+        {
+          "column": "label",
+          "row_group": 2,
+          "error": "an integer is required"
+        },
+        {
+          "column": "label",
+          "row_group": 3,
+          "error": "an integer is required"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-enum-v2-c1-d1-allnull.parquet",
+          "sha256": "2edd044415b467fec05105a44ce900bbe3e338ac046edab78eee4a964214bc2d"
+        }
+      ]
+    },
+    {
+      "path": "small-nested-v2-c1-d1-required.parquet",
+      "sha256": "57c4af5ee5b07c20743d25f164d53d89891c8a5dda1457d466527775f416befa",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "items",
+          "row_group": 2,
+          "local_rows": [
+            2,
+            6,
+            10,
+            14,
+            18,
+            22,
+            26,
+            30
+          ],
+          "error": "LIST null locations differ"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-nested-v2-c0-d1-required.parquet",
+          "sha256": "4c9a92e78d752d4ad37e16531310890ef56445bcfee83ee22673394a8cfb3d0c"
+        },
+        {
+          "path": "small-nested-v1-c1-d1-required.parquet",
+          "sha256": "afd5cec856220fd1a634315abff57d53a870f1e50a1363120a9795aae47af6f1"
+        }
+      ]
+    },
+    {
+      "path": "small-nested-v2-c2-d1-required.parquet",
+      "sha256": "82ae8512dca152e675be073875e4454a19bc7b1979d312aca21445bfbf47d664",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "items",
+          "row_group": 2,
+          "local_rows": [
+            2,
+            6,
+            10,
+            14,
+            18,
+            22,
+            26,
+            30
+          ],
+          "error": "LIST null locations differ"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-nested-v2-c0-d1-required.parquet",
+          "sha256": "4c9a92e78d752d4ad37e16531310890ef56445bcfee83ee22673394a8cfb3d0c"
+        },
+        {
+          "path": "small-nested-v1-c2-d1-required.parquet",
+          "sha256": "c99cf843009d2bdfc05df99f47b4f5afe726d2bfec35a33f77ec06e80061f9cb"
+        }
+      ]
+    },
+    {
+      "path": "small-nested-v2-c6-d1-required.parquet",
+      "sha256": "9e94d114645b5c3a512eb885d614643051a093a901db3a8d788ecd72ad6a7820",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "issues": [
+        {
+          "column": "items",
+          "row_group": 2,
+          "local_rows": [
+            2,
+            6,
+            10,
+            14,
+            18,
+            22,
+            26,
+            30
+          ],
+          "error": "LIST null locations differ"
+        }
+      ],
+      "controls": [
+        {
+          "path": "small-nested-v2-c0-d1-required.parquet",
+          "sha256": "4c9a92e78d752d4ad37e16531310890ef56445bcfee83ee22673394a8cfb3d0c"
+        },
+        {
+          "path": "small-nested-v1-c6-d1-required.parquet",
+          "sha256": "385743ff2367728c91d7d2672721aba7486f3fc2052254988282df9ec58afc18"
+        }
+      ]
+    }
+  ]
+}
