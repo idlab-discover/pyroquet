@@ -169,6 +169,10 @@ class Gate:
 
 
 def native_checks(gate):
+    corpus_out = gate.out / 'corpus-acquisition'
+    gate.run('acquire-golden-corpus', [PYTHON, 'tests/release/corpus.py', '--acquire-only', '--out', corpus_out])
+    corpus_report = corpus_out / 'report.json'
+    gate.report.setdefault('evidence', {})[str(corpus_report)] = digest(corpus_report)
     gate.run('bootstrap-regressions', [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests/bootstrap', '-p', 'test_*.py'])
     for name in ('nested', 'string', 'enum', 'gzip', 'float16'):
         gate.run('generate-' + name, [PYTHON, f'tests/{name}_fixture_oracle.py', '--generate'])

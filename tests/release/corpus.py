@@ -159,10 +159,13 @@ def review_zero_columns(fixture, comparison, file):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--binary', type=Path, required=True)
+    parser.add_argument('--binary', type=Path)
+    parser.add_argument('--acquire-only', action='store_true')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--corpus', type=Path, default=ROOT.parent / 'fastparquet')
     args = parser.parse_args()
+    if not args.acquire_only and args.binary is None:
+        parser.error('--binary is required unless --acquire-only is specified')
     out = args.out.resolve(); out.mkdir(parents=True, exist_ok=True)
     report = dict(status='running', revision=REVISION, upstream=UPSTREAM,
                   records=[], unexpected=[], limitations=[])
@@ -184,8 +187,12 @@ def main():
             'Upstream LICENSE is preserved alongside this notice. Original fixture bytes are unchanged.\n')
         report.update(checkout=str(checkout), corpus=str(corpus), inventory=found,
                       untracked=git(checkout, 'ls-files', '--others', '--exclude-standard'),
-                      binary=dict(path=str(args.binary.resolve()), sha256=digest(args.binary)),
                       oracle_versions={n: importlib.metadata.version(n) for n in ('pyarrow', 'duckdb', 'fastparquet')})
+        if args.acquire_only:
+            report['status'] = 'fixture_inventory_verified'
+            save()
+            return False
+        report['binary'] = dict(path=str(args.binary.resolve()), sha256=digest(args.binary))
         exclusions = {x['path']: x for x in json.loads(EXCLUSIONS.read_text())['fixtures']}
         for index, fixture in enumerate(found):
             record = dict(fixture=fixture, status='pending', role='dataset_summary' if Path(fixture['path']).name in ('_metadata', '_common_metadata') else 'standalone_file')
