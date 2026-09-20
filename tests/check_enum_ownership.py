@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PRELUDE = """from pyroquet.enum_column import EnumColumn, EnumBuilder
+PRELUDE = """from pyroquet.enum_column import EnumColumn, EnumBuilder, EnumIndices
 from pyroquet.string_column import StringColumn
 from pyroquet.numeric_column import NumericColumn
 
@@ -80,7 +80,7 @@ def main() raises:
     print(escape().value(0))
 """),
     "escape_indices": (False, """
-def escape() raises -> ref[ImmStaticOrigin] NumericColumn[DType.uint32]:
+def escape() raises -> EnumIndices[ImmStaticOrigin, ImmStaticOrigin]:
     var c = column()
     return c.indices()
 
