@@ -1,6 +1,8 @@
 # Large-file baseline tools
 
-Run from the repository root with `build/oracle-uv/bin/python`. Originals are read-only. Local manifests, evidence and snapshots remain in ignored `benchmarks/large-files`, `profiling/large-files`, `build/large-files`, and `docs/private/investigations`.
+Run from repo root with `build/oracle-uv/bin/python`. Originals read-only.
+Local manifests/evidence/snapshots → ignored `benchmarks/large-files`,
+`profiling/large-files`, `build/large-files`, `docs/private/investigations`.
 
 ```sh
 build/oracle-uv/bin/python tests/large_files/inventory.py
@@ -12,19 +14,48 @@ build/oracle-uv/bin/python tests/large_files/page_shapes.py
 build/oracle-uv/bin/python tests/large_files/instrument.py
 ```
 
-The inventory reads every footer before selection; `manifest.json` fixes literal ordered projections, complete-file SHA-256, rows, selected compressed bytes and output budgets. The selected-original cohort uses EMBER-2017 training, NF-UQ-NIDS-V2 and LUFlow. The rejected EMBER-concat cohort is retained separately; it must not be silently reintroduced. Existing small controls, UNSW and Infil1 are inherited from the retained Snappy-0.1.0 comparison. The frozen dependency source comes from that retained cohort, which must exist. No production implementation is modified.
+Inventory reads every footer before selection. `manifest.json` freezes ordered
+projections, whole-file SHA256, rows, selected compressed bytes, output budgets.
+Selected originals: EMBER-2017 training, NF-UQ-NIDS-V2, LUFlow. Rejected EMBER-concat
+cohort retained separately; never silently reintroduce. Small controls, UNSW,
+Infil1 and frozen dependency source come from retained Snappy-0.1.0 cohort;
+that cohort must exist. Production unchanged.
 
-`run.py` refuses to overwrite an evidence directory, verifies input hashes, randomizes serialized cases/engines, pins one CPU, records one warmup and one timed full materialization per process, and runs six rounds by default. Pyroquet's output destruction is outside timing. Arrow reads a full Table; DuckDB fetches a full Arrow Table, including connection setup/close. Fastparquet is a validation oracle, not a throughput comparator. Hash reads and an untimed load warm caches; these are not controlled cold-cache measurements. Linux `wait4` gives process peak RSS, while `/proc` I/O observations are lower bounds and include warmup/startup. Samples with observed swapping or visible foreign CPU activity are retained but excluded. PID namespaces can limit foreign-process visibility; the current runner also compares pinned-CPU busy time with child CPU time.
+`run.py`: fresh evidence directory; verify input hashes; randomize serialized
+cases/engines; pin one CPU; one warmup + one timed full materialization/process;
+six rounds default. Pyroquet destruction outside timing. Arrow materializes full
+Table; DuckDB fetches full Arrow Table including connection setup/close.
+Fastparquet validates only. Hash reads/untimed load warm caches: no controlled
+cold-cache measurements. Linux `wait4` → peak process RSS; `/proc` I/O → lower
+bounds including startup/warmup. Swapping/visible foreign CPU activity → retained
+but excluded samples. PID namespaces limit visibility; runner also compares
+pinned-CPU busy time against child CPU time.
 
-Use `--engines pyroquet --binary PATH` for another binary. Use `--candidate PATH --engines pyroquet --out paired-NAME` to randomize paired baseline/candidate trials with the same manifest and lifecycle. Candidate binaries must implement `load.mojo`'s CLI. `build.py --out build/another-cohort` freezes the current source, retaining the same isolated dependency imports; it rejects reuse of a snapshot containing different source. Never rebuild an accepted binary in place for a comparison. Keep assertion modes matched.
+Alternate binary: `--engines pyroquet --binary PATH`. Paired randomized trials,
+same manifest/lifecycle: `--candidate PATH --engines pyroquet --out paired-NAME`.
+Candidates implement `load.mojo` CLI. `build.py --out build/another-cohort` freezes
+current source with same isolated dependencies; rejects snapshot reuse with
+different source. Never rebuild accepted comparison binary in place. Match
+assertion modes.
 
-Validation exports a full Pyroquet result to temporary column files, exits, then compares every value in 65,536-row chunks against Arrow and DuckDB, including integer types, null locations, row order and exact float bits for Arrow. DuckDB NaN payloads are outside scope. Fastparquet materializes one column at a time (its row-group API cannot bound huge single groups); its float NaN/null ambiguity is explicit. The export buffer is bounded, but the library still materializes the selected table. Failures and oracle exceptions are recorded, never counted as passes.
+Validation exports full Pyroquet result to temporary columns, exits, compares
+every value against Arrow/DuckDB in 65,536-row chunks: integer types, nulls, order,
+exact float bits for Arrow. DuckDB NaN payloads outside scope. Fastparquet loads
+one column at a time; row-group API cannot bound huge single groups. Its NaN/null
+ambiguity stays explicit. Export buffer bounded; library still materializes
+selected table. Failures/oracle exceptions never passes.
 
-Instrumentation modifies only a disposable frozen source copy. Its timers and printing perturb execution; phase times are explanatory evidence, not baseline throughput. Validate the instrumented binary using `validate.py --binary build/large-files/profile-load --out profile-validation --cases ...` before interpreting it. Keep page header encoding counts distinct from decoded level-run counts.
+Instrumentation touches disposable frozen source only. Timers/printing perturb
+execution; phase times explain, do not establish baseline throughput. Before
+interpretation: `validate.py --binary build/large-files/profile-load --out profile-validation --cases ...`.
+Page-header encoding counts separate from decoded level-run counts.
 
-For the preserved 2026-09-18 cohort, read `docs/private/investigations/large-file-baseline-20260918.md`. The baseline already exists: rebuilding requires a new output directory, for example `build.py --out build/large-files-rebuild`, followed by `run.py --binary build/large-files-rebuild/load --out rebuild-trials`.
+Preserved 2026-09-18 cohort: `docs/private/investigations/large-file-baseline-20260918.md`.
+Existing baseline must not be rebuilt in place. Example rebuild:
+`build.py --out build/large-files-rebuild`, then
+`run.py --binary build/large-files-rebuild/load --out rebuild-trials`.
 
-Additional evidence commands, run serially after measurements:
+Additional evidence, serially after measurements:
 
 ```sh
 build/oracle-uv/bin/python tests/large_files/profile_validate.py
@@ -32,4 +63,9 @@ build/oracle-uv/bin/python tests/large_files/profile.py
 build/oracle-uv/bin/python tests/large_files/summarize.py
 ```
 
-`oracle_exceptions.json` permits only a previously documented fixture-hash/version/error-specific Fastparquet failure. Its result remains `known_failure_not_pass`; an unexpected exception or mismatch fails validation. The first unclassified failure is retained alongside its reviewed rerun. Hardware profiles sample user cycles and do not measure wall-time fractions. Massif commands/raw captures in `profiling/large-files` distinguish ordinary heap interception (incomplete for direct mappings) from virtual mapped-page accounting.
+`oracle_exceptions.json`: documented fixture-hash/version/error-specific
+Fastparquet failure only; result `known_failure_not_pass`. Unexpected exception
+or mismatch fails validation. First unclassified failure retained with reviewed
+rerun. Hardware profiles sample user cycles, not wall-time fractions.
+Massif commands/raw captures in `profiling/large-files` distinguish heap
+interception (misses direct mappings) from virtual mapped-page accounting.

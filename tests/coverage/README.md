@@ -1,11 +1,10 @@
 # Golden coverage ledger
 
-Development-only evidence collection. Nothing here runs inside the library.
-Original corpus files are read-only. Generated ledgers, exports, controls and
-preserved fixture copies belong under ignored `build/`; adjudication reports
-belong under ignored `docs/private/`.
+Development evidence only; no library execution. Original corpus read-only.
+Generated ledgers, exports, controls and preserved fixtures → ignored `build/`.
+Adjudication reports → ignored `docs/private/`.
 
-From the repository root, build the full-table exporter and run:
+From repo root:
 
 ```sh
 build/oracle-uv/bin/python tests/coverage/full_table.py --build
@@ -17,89 +16,77 @@ build/oracle-uv/bin/python tests/coverage/ledger.py \
 build/oracle-uv/bin/python -m unittest discover -s tests/coverage -p 'test_*.py' -v
 ```
 
-The Python environment uses `tests/oracle-requirements.txt`. Reader compilation
-uses the pinned Pixi Mojo environment. Build provenance includes source,
-compiler/runtime and dependency identities. The ledger checks recorded source
-and binary hashes before using an exporter with a build record.
+Python: `tests/oracle-requirements.txt`. Reader: pinned Pixi Mojo. Build provenance
+records source, compiler/runtime and dependencies. Exporters with build records
+require matching source/binary hashes.
 
-`--corpus` defaults to `../fastparquet/test-data`. `--out` defaults to
-`build/coverage-ledger`; select a fresh output directory to retain separate runs.
-Discovery uses PAR1 magic, including extensionless files and dataset summaries.
-`--preserve-fixtures` copies every active selected original into the output directory
-and refuses to overwrite an existing copy with different bytes. Do not regard
-that directory as a collection of valid inputs: invalid and disputed files are
-preserved too.
+Defaults: `--corpus ../fastparquet/test-data`, `--out build/coverage-ledger`.
+Use fresh output for separate runs. PAR1 discovery includes extensionless files
+and dataset summaries. `--preserve-fixtures` copies every active selected original;
+different existing bytes fail. Preserved files include invalid/disputed inputs.
 
-The historical directory is optional. When supplied, its inventory, manifest,
-results and identity files are retained by hash. Numeric comparisons apply only
-to the recorded selection and matching fixture SHA256. Changed files invalidate
-historical comparisons, rather than inheriting a pass. Missing historical files
-remain listed. `--replay-numeric` additionally requires the original executable
-hash to match and compares a fresh export against the retained reference digest;
-it is a replay of that frozen implementation, not a current-source build or a
-fresh independent oracle run.
+Optional historical directory: inventory, manifest, results and identities retained
+by hash. Numeric comparisons cover recorded selection and matching SHA256 only.
+Changed bytes invalidate historical comparisons; missing files remain listed.
+`--replay-numeric` also requires original executable hash; fresh export compared
+against retained reference digest. Frozen implementation replay only, neither
+current-source build nor fresh independent oracle run.
 
-The full-table exporter uses current library source. It attempts all standalone
-files, including those excluded by the historical numeric selector. Native
-`exported` means loading and serialization completed, not parity. Each oracle
-receives an independent comparison of complete values, names, types, nullability,
-fixed width and order. Floating values use raw bits; nulls remain separate.
-Oracle limitations, errors and mismatches remain separate outcomes. For a native
-rejection, full-table oracles are `not_exercised`; historical numeric evidence
-is still retained separately. Arbitrary key/value metadata and unsupported
-logical/nested representations are not covered by this export contract. Footer
-inspection is recorded separately and does not imply metadata parity.
+Current-source full-table exporter attempts all standalone files, including
+historically unselected files. Native `exported` = load/serialization success only.
+Each oracle independently compares complete values, names, types, nullability,
+fixed width and order. Floats compared by bits; nulls separate. Oracle limitations,
+errors and mismatches remain separate outcomes. Native rejection → full-table
+oracles `not_exercised`; historical numeric evidence retained separately.
+Arbitrary key/value metadata and unsupported logical/nested representations outside
+export contract. Separate footer inspection does not establish metadata parity.
 
-Dataset summaries are inventoried without following external column references.
-They do not enter standalone full-table comparisons. Writer behavior is
-`not_exercised`: reading a producer's fixture does not establish Pyroquet writing.
+Dataset summaries: inventory only; no external column references followed,
+no standalone full-table comparison. Writer `not_exercised`: producer-fixture
+reads do not establish Pyroquet writing.
 
 ## Excluded invalid fixtures
 
-`excluded_fixtures.json` marks the 12 adjudicated invalid originals as excluded
-from active coverage, parity and benchmark selection. The ledger keeps their
-identity and prior findings, but skips footer/page investigation, native replay
-and oracle execution. Active summary counts omit them; exclusions are reported
-separately and never count as passes. Existing preserved copies remain archival.
+`excluded_fixtures.json`: 12 adjudicated invalid originals excluded from active
+coverage/parity/benchmarks. Ledger retains identities/prior findings; skips
+footer/page investigation, native replay and oracles. Active counts omit exclusions;
+reported separately, never passes. Preserved copies remain archival.
 
-Exclusions require both relative path and SHA256. Replaced or repaired bytes
-become active again. `customer.impala.parquet` remains active because its RLE
-adjudication is unresolved. Other corpus consumers should use
-`fixture_exclusion()` with this same manifest before selecting workloads.
-Targeted malformed-input regression probes remain available separately.
+Exclusion requires relative path + SHA256; repaired/replaced bytes reactivate.
+`customer.impala.parquet` stays active: RLE adjudication unresolved. Other corpus
+consumers should select through `fixture_exclusion()` and same manifest.
+Targeted malformed-input regression probes remain separate.
 
 ## Dispositions and evidence
 
-- `implementation_gap`: an observed reader rejection names unsupported behavior;
-  this does not establish validity of the rest of the file.
-- `invalid_fixture`: a cited specification rule and measured declarations/bytes
-  establish a violation. This does not resolve every other issue in the file.
-- `unresolved_disagreement`: evidence is insufficient for a normative decision.
-- `not_adjudicated`: no violation established by the limited inspections; never
-  a general validity pass.
-- `not_exercised`: excluded, unavailable or deliberately outside that operation.
+- `implementation_gap`: observed rejection names unsupported behavior; remainder
+  of file not certified valid.
+- `invalid_fixture`: cited spec rule + measured declarations/bytes prove violation;
+  other issues may remain.
+- `unresolved_disagreement`: insufficient evidence for normative decision.
+- `not_adjudicated`: limited inspection found no violation; not validity pass.
+- `not_exercised`: excluded, unavailable or outside operation.
 
-A file may have several findings: an invalid footer can coexist with a missing
-codec. The summary prioritizes confirmed invalidity but retains every finding.
-An oracle's acceptance is evidence of behavior, not a specification override.
+Multiple findings allowed: invalid footer may coexist with missing codec.
+Summary prioritizes confirmed invalidity; retains all findings. Oracle acceptance
+never overrides spec.
 
-`metadata_evidence.py` records declared totals and bounded page-header scans,
-including actual data-page encodings (footer encoding sets are not page counts).
-It does not decompress bodies. Limits or incomplete scans remain explicit.
-`page_evidence.py` examines two named legacy fixtures with an independent,
-bounded width-one level decoder and measured PLAIN lengths. Scope and spec
-references accompany each finding. `nation_evidence.py` additionally checks the hash-pinned truncated dictionary
-run fixture. No test helper is a general Parquet validator.
+`metadata_evidence.py`: declared totals, bounded page-header scans, actual data-page
+encodings. Footer encoding sets are not page counts. No body decompression;
+limits/incomplete scans explicit. `page_evidence.py`: two named legacy fixtures,
+independent bounded width-one level decoder, measured PLAIN lengths.
+`nation_evidence.py`: hash-pinned truncated dictionary run. Findings retain scope
+and spec references. Helpers are not general Parquet validators.
 
-`replay_page_adjudication.py` reproduces the two page rejections, retains offending
-page extracts and makes surgical control copies under `build/`. It requires the
-retained numeric exporter; run `--help` for paths. Controls establish the cause of
-a rejection, not full validity of unselected columns. Originals remain unchanged.
+`replay_page_adjudication.py`: reproduces two page rejections; retains offending
+extracts/surgical control copies under `build/`. Requires retained numeric exporter;
+see `--help`. Controls establish rejection cause, not validity of unselected
+columns. Originals unchanged.
 
-`ledger.json` is emitted only after the inventory finishes. An interrupted run
-leaves `progress.json` with `complete: false`. The final `complete` flag means
-all discovered entries were processed; it does not turn unresolved rules,
-unexercised comparisons or known oracle limitations into successes.
+`ledger.json` emitted after inventory finishes. Interrupted runs leave
+`progress.json` with `complete: false`. Final `complete` means all discovered
+entries processed; unresolved rules, unexercised comparisons and oracle
+limitations remain nonpasses.
 
 ## Current GZIP numeric projections
 
@@ -107,17 +94,16 @@ unexercised comparisons or known oracle limitations into successes.
 build/oracle-uv/bin/python tests/coverage/current_numeric.py
 ```
 
-This rebuilds `tests/read_numeric.mojo` from current source and compares every
-supported numeric GZIP column in active standalone golden files with fresh
-PyArrow, DuckDB and Fastparquet reads. Exact values, floating bits, null locations
-and row order are compared; the typed native loader validates the selected field's
-physical/logical type. Field nullability is selected from oracle metadata, not
-independently exported by this numeric probe. It does not certify other columns,
-whole-table loading or arbitrary metadata. Hash-matched excluded originals and
-external-reference dataset summaries are omitted explicitly. Results and build
-provenance are retained under `build/gzip-current-numeric/` by default.
+Rebuilds `tests/read_numeric.mojo` from current source. Compares every supported
+numeric GZIP column in active standalone golden files against fresh PyArrow,
+DuckDB and Fastparquet reads: complete values, float bits, nulls, order.
+Typed native loader validates selected physical/logical type. Nullability comes
+from oracle metadata, not independent native export. Other columns, whole-table
+loads and arbitrary metadata not certified. Hash-matched exclusions/external-
+reference summaries explicitly omitted. Default evidence/provenance:
+`build/gzip-current-numeric/`.
 
-Current exporter provenance includes the pinned zlib and Mojo runtime library
-hashes alongside source/compiler/native-Snappy identities. Actual loader resolution
-can be audited using `tests/check_zlib_abi.py` and `LD_DEBUG=libs`; see the public
-GZIP setup documentation for deployed loader requirements.
+Exporter provenance includes pinned zlib/Mojo runtime library hashes and
+source/compiler/native-Snappy identities. Audit loader resolution with
+`tests/check_zlib_abi.py` and `LD_DEBUG=libs`; deployed requirements in
+[root README](../../README.md#supported-values-and-storage).
