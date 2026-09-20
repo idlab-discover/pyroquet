@@ -1,10 +1,13 @@
 """Packed immutable Boolean values with independent LSB-first validity."""
 
 from .storage import FrozenBuffer
+from std.memory import ArcPointer
+from numojo.core.ndarray import NDArray
+from numojo.routines.creation import empty
 
 
 struct BooleanColumn(Copyable, Movable, Sized):
-    var _values: FrozenBuffer[UInt8]
+    var _values: ArcPointer[NDArray[DType.uint8]]
     var _validity: FrozenBuffer[UInt8]
     var _count: Int
     var _null_count: Int
@@ -36,7 +39,10 @@ struct BooleanColumn(Copyable, Movable, Sized):
                 if (validity[i // 8] & (UInt8(1) << UInt8(i % 8))) == 0:
                     self._null_count += 1
                     values[i // 8] &= ~(UInt8(1) << UInt8(i % 8))
-        self._values = FrozenBuffer(values^)
+        var packed = empty[DType.uint8]([size])
+        for i in range(size):
+            packed.unsafe_ptr()[unsafe_offset=i] = values[i]
+        self._values = ArcPointer(packed^)
         self._validity = FrozenBuffer(validity^)
         self._count = count
 
@@ -55,4 +61,6 @@ struct BooleanColumn(Copyable, Movable, Sized):
             and (self._validity[index // 8] & mask) == 0
         ):
             return None
-        return (self._values[index // 8] & mask) != 0
+        return (
+            self._values[].unsafe_ptr()[unsafe_offset=index // 8] & mask
+        ) != 0

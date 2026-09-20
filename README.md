@@ -387,7 +387,10 @@ var binary = builder^.freeze()
 Build a table column with `Column("payload", binary^)` and a matching
 `SchemaNode("payload", SchemaNode.BINARY, 0, nullable=True)`. Boolean storage uses
 `BooleanColumn(count, packed_values, packed_validity)` with LSB-first bitmaps;
-an empty validity bitmap means all valid. Fixed binary uses
+an empty validity bitmap means all valid. Value bytes occupy exactly
+`ceil(rows / 8)` bytes in NuMojo `uint8` storage. Boolean copies retain the same
+packed allocation; the packed handle stays internal and does not provide per-row
+NuMojo Boolean arithmetic. Validity remains native. Fixed binary uses
 `BinaryBuilder(fixed_width=N)` (or `BinaryColumn(..., fixed_width=N)`) and
 `SchemaNode(..., SchemaNode.FIXED_BINARY, ..., fixed_width=N)`; present values
 must have exactly that positive width. Null values consume no arena bytes.
