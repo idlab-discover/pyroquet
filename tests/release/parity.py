@@ -197,11 +197,17 @@ def catalog_review(path,column,group_index,error,result):
     return dict(status='reviewed_disagreement_not_pass',column=column,row_group=group_index,error=str(error),fixture_sha256=record['sha256'],controls=record['controls'],issue=issue)
 
 
-def review_fastparquet_error(path,column,group_index,error,result):
+def review_fastparquet_error(path,column,group_index,error,result,out=None):
     """Only generated, hash-pinned V2 cases with independently reproduced errors."""
     import fastparquet
     known=catalog_review(path,column,group_index,error,result)
     if known is not None:return known
+    if (out is not None
+            and result['engines'].get('pyarrow',{}).get('dimensions',{}).get('values')=='pass'
+            and result['engines'].get('duckdb',{}).get('dimensions',{}).get('values')=='pass'):
+        from list_controls import review_large_list
+        reviewed=review_large_list(path,column,group_index,error,out)
+        if reviewed is not None:return reviewed
     message=str(error)
     patterns=(r'NumPy boolean array indexing assignment cannot assign \d+ input values to the \d+ output values where the mask is true',
               r'boolean index did not match indexed array along axis 0; size of axis is \d+ but size of corresponding boolean axis is \d+',
@@ -277,7 +283,7 @@ def compare_export(path, export_dir):
                                 try:
                                     series=frame[name]
                                 except Exception as error:
-                                    review=review_fastparquet_error(path,name,group_index,error,result)
+                                    review=review_fastparquet_error(path,name,group_index,error,result,export.directory)
                                     if review is None: raise
                                     entry['reviewed_reader_errors'].append(review)
                                     entry['limitations'].append(f'Fastparquet {name}: reviewed reader error; values/nulls/order unavailable for row group {group_index}')
