@@ -1,0 +1,53 @@
+name: Release qualification
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      large:
+        description: Run mandatory candidate large-file qualification after ordinary checks
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Prepare pinned sibling source dependencies
+        run: python3 tools/bootstrap.py --dependencies-only
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          pixi-version: v0.80.0
+          locked: true
+      - name: Install pinned development package manager
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pyroquet-uv-tools"
+          "$RUNNER_TEMP/pyroquet-uv-tools/bin/python" -m pip install 'uv==0.12.10'
+      - name: Bootstrap compiler and independent readers
+        run: python3 tools/bootstrap.py --uv "$RUNNER_TEMP/pyroquet-uv-tools/bin/uv"
+      - name: Bootstrap safety controls
+        run: python3 -m unittest discover -s tests/bootstrap -p 'test_*.py'
+      - name: Ordinary release checks
+        run: pixi run --locked check-release
+      - name: Large candidate checks using the same frozen exporter
+        if: github.event_name == 'workflow_dispatch' && inputs.large
+        run: pixi run --locked check-release-large
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: linux-x86-64-qualification-evidence
+          path: |
+            build/release/**/*.json
+            build/release/**/*.txt
+          if-no-files-found: warn
