@@ -31,7 +31,8 @@ def _sources(root):
         '.pixi/envs/default/lib/libKGENCompilerRTShared.so',
         '.pixi/envs/default/lib/mojo/mojo_snappy.mojoc',
         '.pixi/envs/default/lib/mojo/std.mojoc'))
-    return {str(path.resolve()): _hash(path) for path in sorted(paths)}
+    paths.extend((root / '.pixi/envs/default/lib/mojo').glob('*.mojoc'))
+    return {str(path.resolve()): _hash(path) for path in sorted(set(paths))}
 
 
 def _run(command, cwd=None):

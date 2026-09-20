@@ -60,6 +60,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/traitlets-5.16.1-pyhcf101f3_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/zipp-4.1.0-pyhcf101f3_0.conda
+      - conda: https://conda.modular.com/max/linux-64/max-core-26.5.0-release.conda
       - conda: https://conda.modular.com/max/linux-64/mojo-1.0.0-release.conda
       - conda: https://conda.modular.com/max/linux-64/mojo-compiler-1.0.0-release.conda
       - conda: https://conda.modular.com/max/noarch/mblack-26.5.0-release.conda
@@ -719,6 +720,15 @@ packages:
   run_exports: {}
   size: 24190
   timestamp: 1779159948016
+- conda: https://conda.modular.com/max/linux-64/max-core-26.5.0-release.conda
+  sha256: a2aca8a7dc43cdac10f286ba31a811468794631e514f0df2687464cba15deeb0
+  md5: 85c39f2cdbb36c2837c59150fad012d9
+  depends:
+  - mojo-compiler ==1.0.0
+  license: LicenseRef-Modular-Proprietary
+  run_exports: {}
+  size: 117588665
+  timestamp: 1786292557073
 - conda: https://conda.modular.com/max/linux-64/mojo-1.0.0-release.conda
   sha256: 5778f999b69cf77bd6f07ccaf32d0bafc258fe75206afc8e88919269cebb6e75
   md5: afeb126acb57602a5f9b8153e75e1c3c

@@ -87,6 +87,7 @@ mojo-snappy = { path = "../mojo-snappy" }
 mojo = "==1.0.0"
 libzlib = "==1.3.2"
 zstd = "==1.5.7"
+max-core = "==26.5.0"
 
 [activation.env]
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"

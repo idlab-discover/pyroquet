@@ -67,12 +67,16 @@ def identity():
         'bin/mojo', 'lib/mojo/std.mojoc', 'lib/mojo/mojo_snappy.mojoc',
         'lib/libKGENCompilerRTShared.so', 'lib/libz.so.1', 'lib/libzstd.so.1',
         'lib/libMSupportGlobals.so', 'lib/libAsyncRTRuntimeGlobals.so',
+        'lib/libAsyncRTMojoBindings.so',
         'lib/libstdc++.so.6', 'lib/libgcc_s.so.1')}
-    dynamic = subprocess.check_output(['ldd', str(prefix / 'lib/libKGENCompilerRTShared.so')], text=True)
-    for line in dynamic.splitlines():
-        parts = line.split('=>', 1)[-1].strip().split()
-        if parts and parts[0].startswith('/'):
-            runtime[parts[0]] = digest(parts[0])
+    for package in sorted((prefix / 'lib/mojo').glob('*.mojoc')):
+        runtime[str(package.relative_to(prefix))] = digest(package)
+    for library in ('libKGENCompilerRTShared.so', 'libAsyncRTMojoBindings.so'):
+        dynamic = subprocess.check_output(['ldd', str(prefix / 'lib' / library)], text=True)
+        for line in dynamic.splitlines():
+            parts = line.split('=>', 1)[-1].strip().split()
+            if parts and parts[0].startswith('/'):
+                runtime[parts[0]] = digest(parts[0])
     return {'commit': git('rev-parse', 'HEAD'),
             'dirty': git('status', '--porcelain'), 'sources': sources,
             'dependencies': deps, 'runtime': runtime, 'oracles': versions,
@@ -165,6 +169,7 @@ class Gate:
 
 
 def native_checks(gate):
+    gate.run('bootstrap-regressions', [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests/bootstrap', '-p', 'test_*.py'])
     for name in ('nested', 'string', 'enum', 'gzip', 'float16'):
         gate.run('generate-' + name, [PYTHON, f'tests/{name}_fixture_oracle.py', '--generate'])
     for source in sorted((ROOT / 'tests').glob('test_*.mojo')):
@@ -186,6 +191,13 @@ def native_checks(gate):
     for task, artifact in [('package', 'build/pyroquet.mojoc'), ('package-compact', 'build/compact_protocol.mojoc')]:
         gate.run(task, ['pixi', 'run', task])
         gate.report.setdefault('packages', {})[artifact] = digest(ROOT / artifact)
+    smoke = gate.out / 'bin/package-smoke'
+    gate.run('build-package-consumer', ['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
+                                      '-I', 'build', '-I', '../NuMojo', 'tests/release/package_smoke.mojo', '-o', smoke])
+    gate.report['binaries'][str(smoke)] = digest(smoke)
+    gate.run('package-consumer', [smoke])
+    gate.build('examples/mutate_numeric.mojo', 'mutation-example')
+
 
 
 def fixtures_and_parity(gate, large, binary=None):
