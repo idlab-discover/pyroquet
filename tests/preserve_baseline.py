@@ -13,7 +13,7 @@ import subprocess
 import tarfile
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = ROOT.parent / "pyroquet"
+BASELINE = ROOT.parent / "pyroquet-legacy"
 
 
 def git(*args):
