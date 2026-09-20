@@ -16,7 +16,7 @@ permissions:
 
 concurrency:
   group: release-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   qualify:
@@ -41,7 +41,7 @@ jobs:
       - name: Ordinary release checks
         run: pixi run --locked check-release
       - name: Large candidate checks using the same frozen exporter
-        if: github.event_name == 'workflow_dispatch' && inputs.large
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.large)
         run: pixi run --locked check-release-large
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
@@ -50,4 +50,10 @@ jobs:
           path: |
             build/release/**/*.json
             build/release/**/*.txt
+            build/release/**/*.stdout
+            build/release/**/*.stderr
+            build/strings/*.json
+            build/enums/*.json
+            build/numeric-write-checks/*/results.json
+            build/zstd/results.json
           if-no-files-found: warn

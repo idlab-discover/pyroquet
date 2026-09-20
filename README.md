@@ -1,80 +1,41 @@
 # Pyroquet
 
-Parquet library for **Linux x86-64 and Mojo 1.0.0**. NuMojo numeric storage supports
-in-place operations. Parsing, encoding, storage and scheduling run in Mojo.
-External C libraries: GZIP/ZSTD codecs only. Python: development tools only.
+![Pyroquet: a flame mascot beside glowing data columns](assets/branding/pyroquet-logo-169.png)
 
-0.1.0 contract below. Candidate qualification requires both release gates;
-tagging/publishing remain separate.
+Read, edit and write Parquet files in Mojo. Pyroquet loads numeric columns into
+[NuMojo](https://github.com/Mojo-Numerics-and-Algorithms-group/NuMojo) arrays, so you
+can work on their values in place and save the result to a new file.
 
-## Install from a clean checkout
+The library runs in Mojo, with no Python runtime dependency. Snappy is native
+Mojo; GZIP and ZSTD use their C codec libraries. Version **0.1.0** targets
+**Linux x86-64 and Mojo 1.0.0**.
 
-Install Git, Python 3, Pixi **0.80.0** and uv **0.12.10**, then run:
+## Get started
+
+Install Git, Python 3, [Pixi](https://pixi.sh) **0.80.0** and
+[uv](https://docs.astral.sh/uv/) **0.12.10**, then:
 
 ```sh
+git clone https://github.com/idlab-discover/pyroquet.git
+cd pyroquet
+git checkout v0.1.0
 python3 tools/bootstrap.py
-pixi run package
+pixi run --locked package
 ```
 
-Bootstrap creates missing sibling checkouts, verifies exact revisions, installs
-locked Pixi environment and pinned development oracles at `build/oracle-uv`.
-Mismatched existing checkouts fail. Source dependencies:
+The bootstrap script installs the pinned toolchain and development readers. It
+also creates `NuMojo` and `mojo-snappy` checkouts beside the `pyroquet` directory.
+If those directories already exist at different revisions, it stops and leaves
+them unchanged. Use a fresh parent directory in that case.
 
-| Dependency | Revision |
-|---|---|
-| NuMojo | `515fb2856f0ecf3d2740a34d958fe168183e1129` |
-| mojo-snappy | `ad02f439892d7b7813677d94f8e0951be63d0041` |
+This is a source release. The build produces `build/pyroquet.mojoc`; it does not
+install a Python package. See [building and distribution](docs/distribution.md)
+for dependency pins and using the precompiled library.
 
-Build apps: `pixi run mojo build -I src -I ../NuMojo your_app.mojo`.
-`pixi run package` → `build/pyroquet.mojoc`; `pixi run package-compact` →
-`build/compact_protocol.mojoc`. Compile dependencies: NuMojo, mojo-snappy and
-NuMojo's pinned Mojo package `max-core` **26.5.0**. Run through Pixi for pinned
-Mojo runtime shared libraries and codecs.
+## Load, edit and save a column
 
-## Supported values and storage
-
-| Logical value | Parquet physical representation | In-memory values |
-|---|---|---|
-| BOOL | BOOLEAN | Packed NuMojo `uint8`, LSB first |
-| INT8/UINT8, INT16/UINT16 | INT32 with integer annotation | Matching NuMojo dtype |
-| INT32/UINT32, INT64/UINT64 | INT32/INT64 with supported integer annotations | Matching NuMojo dtype |
-| FLOAT16 | FIXED_LEN_BYTE_ARRAY of exactly two bytes, FLOAT16 logical annotation | NuMojo `float16` |
-| FLOAT32/FLOAT64 | FLOAT/DOUBLE | NuMojo `float32`/`float64` |
-| STRING | BYTE_ARRAY with STRING/UTF8 annotation | Native UTF-8 arena and offsets |
-| ENUM | BYTE_ARRAY with ENUM annotation | UTF-8 vocabulary and NuMojo `uint32` indices |
-| Raw/fixed binary | Unannotated BYTE_ARRAY/FIXED_LEN_BYTE_ARRAY | Native byte arena and offsets |
-
-Floating I/O preserves bits: signed zero, subnormals, infinities, NaN payloads.
-FLOAT16 bypasses FLOAT32; no legacy ConvertedType annotation. Narrow integer
-reads check range. STRING/ENUM validate UTF-8; arbitrary bytes require binary.
-
-Flat tables mix all supported types. Nesting: non-repeated STRUCTs containing
-STRUCTs, primitives or LISTs of primitives; at most one repeated ancestor per
-leaf. Required/optional parents, lists and elements preserve null-parent,
-null-list, empty-list and null-element distinctions. Unsupported: MAP, LIST of
-LIST, LIST of STRUCT.
-
-Reads: V1/V2 pages, PLAIN, supported PLAIN_DICTIONARY/RLE_DICTIONARY,
-integer DELTA_BINARY_PACKED, RLE Boolean. Writes: bounded PLAIN pages;
-configurable page/row-group sizes. Unsupported: dictionary writing,
-DELTA_BYTE_ARRAY, DELTA_LENGTH_BYTE_ARRAY, BYTE_STREAM_SPLIT, other encodings,
-temporal/decimal types, INT96. No Parquet page-CRC verification; GZIP stream
-trailers validated independently.
-
-| Storage mode | Codec ID | Runtime requirement |
-|---|---:|---|
-| Uncompressed | 0 | Mojo runtime |
-| Native Snappy | 1 | Pinned mojo-snappy package |
-| GZIP | 2 | `libz.so.1`, pinned `libzlib` 1.3.2 |
-| ZSTD | 6 | `libzstd.so.1`, pinned `zstd` 1.5.7 |
-
-GZIP/ZSTD load lazily through Mojo FFI, Linux LP64 ABI. V1 compresses full body;
-V2 leaves levels raw, compresses values, falls back to raw when compression saves
-no bytes.
-Readers enforce declared output sizes/page limits; malformed/truncated streams
-fail. Retained-output budgets exclude codec workspace and allocator capacity.
-
-## Load, mutate with NuMojo, save
+Suppose `input.parquet` has a FLOAT64 column named `value`. This program fills its
+values with `1.25` and writes a new ZSTD-compressed file:
 
 ```mojo
 from pyroquet.numojo_io import load_numeric
@@ -87,75 +48,71 @@ def main() raises:
     save_numeric("output.parquet", column, NumericWriteOptions(codec=6))
 ```
 
-Match dtype to input schema. See [mutation example](examples/mutate_numeric.mojo)
-and [load/save examples](examples/).
-
-`values_mut()` returns retained shared NuMojo handle. `fill`, `store` and in-place
-element operations affect column and aliases. Reassigning/reshaping handle leaves
-column storage, row count and schema unchanged. Handle outlives column, retaining
-allocation. `values()` borrows for reading; shared aliases can still mutate
-allocation. No allocation-wide immutability guarantee.
-
-Validity stays separate from numeric payloads. `value(row)` returns optional
-scalar; `validity()` borrows packed LSB-first bitmap. Empty bitmap = all present.
-NuMojo operations ignore validity: changed null-slot payloads remain null, never
-written as present. No concurrent mutation while reading/saving.
-
-Shared access also available through `Column.values_mut[dtype]()`,
-`Table.values_mut[dtype](column_index)`, `NestedTable.values_mut[dtype](leaf_index)`.
-Table schema/nested structure stay fixed. BOOL occupies exactly `ceil(rows / 8)`
-bytes; copies share packed storage. No per-row NuMojo Boolean arithmetic promise.
-
-ENUM exposes origin-bound index scalar/span reads; no mutable numeric handles.
-`EnumColumn(labels, indices)` snapshots external indices; builders privately
-adopt fresh allocations. `set_index(row, code)` checks dictionary bounds; only
-existing non-null rows accepted. Column/table wrappers: `set_enum_index`.
-Invalid updates preserve values/validity. No vocabulary/null-mask editing.
-Round trips may change dictionary order, external codes and unused labels.
-
-## Tables, budgets and publication
-
-Flat I/O: `pyroquet.table_io.load_table` / `pyroquet.table_write.save_table`.
-Nested I/O: `pyroquet.nested_io.load_nested_table` /
-`pyroquet.nested_write.save_nested_table`. `pyroquet` exports `Schema`, `SchemaNode`,
-`Column`, `Table`, `NestedTable`, `StringBuilder`, `EnumBuilder`.
-Typed column access checks requested logical identity.
-
-Reader output budget: 1 GiB default; raise `max_output_bytes` for larger loads.
-Page/footer/writer budgets bound corresponding staging areas. Output budgets
-are not RSS limits: dictionaries, codec workspace, temporary buffers and allocator
-capacity add peak memory.
-
-Writers publish **new destinations only**: same-filesystem staging, create-new
-hard link. Never overwrite existing paths; failed writes clean staging.
-No crash-durability guarantee. Save mutations to new path.
-
-## Qualification and known limitations
+Save it as `app.mojo` in the repository root and run:
 
 ```sh
-pixi run check-release
-pixi run check-release-large
+pixi run --locked mojo run -I src -I ../NuMojo app.mojo
 ```
 
-Both gates mandatory. Ordinary: native tests, optimized assertion-enabled/disabled
-acceptance checks, ownership compile-fail checks, malformed codecs, packages,
-pinned Fastparquet golden corpus, complete three-reader comparisons.
-Large: frozen ordinary exporter; two structurally different files >1 GiB **on
-disk**; repeated complete-load times/peak RSS.
-See [qualification workflow](tests/release/README.md).
+Choose the dtype that matches your input. Null entries stay null, even when you
+change the underlying values. The mutable array shares storage with the column;
+changes through either handle affect the same values.
 
-Reports separate values/bytes, logical types, nulls, order and metadata.
-DuckDB erases FLOAT16 width, fixed binary width and SQL result nullability, among
-other distinctions. Fastparquet limitations: FLOAT16/ENUM exposure, fixed-byte
-trailing-NUL, nested-parent validity, NaN/null, V2 dictionary/LIST.
-Reviewed failures retain exact fixture hashes/reproducible controls; remain
-nonpasses. Unexpected failures stop qualification.
+**Saving requires a new destination:** Pyroquet refuses to overwrite an existing
+file. For complete programs, see the [load and save examples](examples/) and the
+[command-line mutation example](examples/mutate_numeric.mojo).
 
-Golden corpus: `f4beb59382e584354c4b2ef2c7a42efa4e97f024`; twelve unchanged
-hash-specific invalid-fixture exclusions. Strict RLE/metadata-offset disagreements
-remain nonpasses; tolerant oracles do not weaken validation. Security dataset
-benchmarks/archived performance snapshots: optional local evidence. New query
-optimizations outside release scope.
+## What can I read and write?
 
-Apache-2.0. See [LICENSE](LICENSE) and
-[third-party notices](THIRD_PARTY_NOTICES.md).
+| Feature | Support in 0.1.0 |
+|---|---|
+| Numbers | Signed and unsigned 8-, 16-, 32- and 64-bit integers; FLOAT16, FLOAT32 and FLOAT64 |
+| Other values | Booleans, UTF-8 strings, ENUM, raw bytes and fixed-width binary |
+| Nulls | Nullable columns, with nulls distinct from floating-point NaNs |
+| Tables | Flat tables; non-repeated STRUCTs and LISTs of primitive values |
+| Compression | Uncompressed, Snappy, GZIP and ZSTD |
+| Reading | V1/V2 pages; PLAIN, supported dictionary encodings, integer DELTA_BINARY_PACKED and RLE Boolean |
+| Writing | PLAIN pages with configurable page and row-group sizes |
+
+Floating-point I/O preserves bits, including signed zero and NaN payloads.
+Nested data preserves the difference between null parents, null lists, empty
+lists and null elements.
+
+This first release supports a subset of Parquet. Dates and times, decimals,
+INT96, MAP, LIST of LIST, LIST of STRUCT, dictionary writing, and several page
+encodings are not supported. Parquet page CRCs are not verified. See the
+[format and API contracts](docs/format-and-api.md) for the exact boundaries.
+
+Loads have a **1 GiB decoded-output budget** by default. Increase
+`max_output_bytes` for larger data. This is not a total memory limit: temporary
+buffers, dictionaries and codec workspaces also use memory.
+
+## Validation
+
+Release checks compare complete values, types, null locations, row order and
+relevant metadata against **PyArrow, DuckDB and Fastparquet**. They also cover
+malformed files, ownership rules, package imports and two files larger than
+1 GiB on disk.
+
+```sh
+pixi run --locked check-release
+pixi run --locked check-release-large
+```
+
+Both gates are required for a release. Some reader features cannot be compared
+fully; those outcomes remain documented nonpasses. Read the
+[compatibility notes](docs/compatibility.md) and
+[qualification workflow](tests/release/README.md) for details.
+
+## More information
+
+- [Format and API contracts](docs/format-and-api.md): types, nesting, mutation, memory budgets and file writing.
+- [Building and distribution](docs/distribution.md): source dependencies, packages and CI.
+- [0.1.0 release notes](docs/release-0.1.0.md): release scope and limitations.
+
+Pyroquet is licensed under [Apache-2.0](LICENSE). See the
+[third-party notices](THIRD_PARTY_NOTICES.md) for dependency licenses and attribution.
+
+<p align="center">
+  <img src="assets/branding/pyroquet-logo-square.png" alt="Pyroquet flame mascot stacking data columns" width="160">
+</p>
