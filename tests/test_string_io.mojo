@@ -44,7 +44,7 @@ def test_string_roundtrip_matrix() raises:
         for count in [0, 1, 9, 37]:
             for mode in range(3):
                 for version in range(1, 3):
-                    for codec in range(3):
+                    for codec in [0, 1, 2, 6]:
                         var table = _table(count, mode)
                         var path = directory + "/strings.parquet"
                         if count == 37 and mode == 1:

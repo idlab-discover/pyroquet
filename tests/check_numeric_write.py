@@ -326,7 +326,7 @@ def run_version():
     source = OUT / 'int32-mixed-source.parquet'
     for label, options in [
         ('null-required', {'nullable': False}),
-        ('codec-negative', {'codec': -1}), ('codec-unsupported', {'codec': 2}),
+        ('codec-negative', {'codec': -1}), ('codec-unsupported', {'codec': 5}),
         ('version-zero', {'page_version': 0}), ('version-three', {'page_version': 3}),
         ('version-negative', {'page_version': -1}),
         ('zero-page', {'page_rows': 0}), ('negative-page', {'page_rows': -1}),

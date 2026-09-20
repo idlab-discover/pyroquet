@@ -58,7 +58,7 @@ def generate():
         records.append(record)
 
     for version in (1, 2):
-        for codec, compression in enumerate(('NONE', 'SNAPPY', 'GZIP')):
+        for codec, compression in ((0, 'NONE'), (1, 'SNAPPY'), (2, 'GZIP'), (6, 'ZSTD')):
             for mode in ('plain', 'dictionary', 'fallback', 'all_null', 'empty', 'rowgroups'):
                 values = [None if i % 7 == 0 else VALUES[i % len(VALUES)] for i in range(137)]
                 if mode == 'fallback':
@@ -134,7 +134,7 @@ def generate():
     (OUT / 'manifest.json').write_text(json.dumps(records, indent=2))
     (OUT / 'versions.json').write_text(json.dumps(dict(pyarrow=pa.__version__, duckdb=duckdb.__version__,
         fastparquet=fastparquet.__version__, pandas=pd.__version__), indent=2))
-    print(f'Generated {len(records)} genuine ENUM fixtures and six nested fixtures')
+    print(f'Generated {len(records)} genuine ENUM fixtures and eight nested fixtures')
 
 
 def verify_readers(path, expected):
@@ -188,7 +188,7 @@ def verify(binary):
         assert lines[1:] == ['null' if v is None else 'bytes' + ''.join(f' {b}' for b in v.encode()) for v in expected], path
         results.append(dict(path=str(path), native='pass', oracles=verify_readers(path, expected)))
     for version in (1, 2):
-        for codec in (0, 1, 2):
+        for codec in (0, 1, 2, 6):
             path = OUT / f'native-v{version}-c{codec}.parquet'
             leaf = fastparquet.ParquetFile(path).fmd.schema[1]
             assert leaf.converted_type == 4 and leaf.logicalType.ENUM is not None

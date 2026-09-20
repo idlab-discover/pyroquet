@@ -187,6 +187,36 @@ def native_checks(gate):
                    'check_zstd', 'check_snappy_resolution'):
         gate.run(script, [PYTHON, f'tests/{script}.py'])
     gate.run('float16-oracles', [PYTHON, 'tests/float16_fixture_oracle.py', '--verify'])
+    for name in ('string', 'enum'):
+        gate.run(name + '-writer-oracles', [PYTHON, f'tests/{name}_fixture_oracle.py',
+                                          '--verify', gate.out / 'bin' / f'test_{name}_io'])
+        report_path = ROOT / f'build/{"strings" if name == "string" else "enums"}/parity.json'
+        if not report_path.is_file():
+            raise RuntimeError('Missing writer oracle report: ' + str(report_path))
+        gate.report.setdefault('evidence', {})[str(report_path)] = digest(report_path)
+        records = json.loads(report_path.read_text())
+        gate.report.setdefault('writer_oracles', {})[name] = {'report': str(report_path), 'sha256': digest(report_path)}
+        for record in records:
+            fixture_path = ROOT / record['path']
+            gate.report.setdefault('evidence', {})[str(fixture_path)] = digest(fixture_path)
+            for engine, outcome in record.get('oracles', {}).items():
+                status = outcome.get('status') if isinstance(outcome, dict) else outcome
+                if status != 'pass':
+                    gate.report['limitations'].append({'suite': name + '-writer-oracles', 'engine': engine,
+                                                      'fixture': record['path'], 'outcome': outcome})
+    gate.run('numeric-writer-oracles', [PYTHON, 'tests/check_numeric_write.py'])
+    numeric_driver = ROOT / 'build/numeric-write-checks/roundtrip'
+    gate.report.setdefault('binaries', {})[str(numeric_driver)] = digest(numeric_driver)
+    for suffix in ('v1', 'v2', 'snappy-v1', 'snappy-v2'):
+        report_path = ROOT / 'build/numeric-write-checks' / suffix / 'results.json'
+        record = json.loads(report_path.read_text())
+        gate.report.setdefault('evidence', {})[str(report_path)] = digest(report_path)
+        gate.report.setdefault('writer_oracles', {})['numeric-' + suffix] = {'report': str(report_path), 'sha256': digest(report_path)}
+        gate.report['limitations'].extend(record['oracle_limitations'])
+        if record.get('native_files', 0) <= 0:
+            raise RuntimeError('No numeric writer outputs compared')
+        for fixture_path in report_path.parent.glob('*.parquet'):
+            gate.report.setdefault('evidence', {})[str(fixture_path)] = digest(fixture_path)
     gate.run('coverage-regressions', [PYTHON, '-m', 'unittest', 'discover', '-s', 'tests/coverage', '-p', 'test_*.py'])
     for task, artifact in [('package', 'build/pyroquet.mojoc'), ('package-compact', 'build/compact_protocol.mojoc')]:
         gate.run(task, ['pixi', 'run', task])
@@ -213,6 +243,38 @@ def fixtures_and_parity(gate, large, binary=None):
         binary = gate.build('tests/release/export.mojo', 'release-export')
     else:
         gate.report.setdefault('binaries', {})[str(binary)] = digest(binary)
+    if not large and not gate.report.get('skip_native'):
+        writer_out = gate.out / 'native-writer-parity'
+        gate.run('native-writer-oracles', [PYTHON, 'tests/release/writer_parity.py',
+                                           '--binary', binary, '--out', writer_out])
+        writer_report_path = writer_out / 'report.json'
+        writer_report = json.loads(writer_report_path.read_text())
+        if (writer_report.get('unexpected') != [] or len(writer_report.get('fixtures', [])) != 48
+                or writer_report.get('status') not in ('pass', 'with_limitations')):
+            raise RuntimeError('Incomplete native writer qualification')
+        gate.report.setdefault('evidence', {})[str(writer_report_path)] = digest(writer_report_path)
+        gate.report.setdefault('writer_oracles', {})['native-table'] = {'report': str(writer_report_path), 'sha256': digest(writer_report_path)}
+        gate.report['limitations'].extend(writer_report['limitations'])
+        for record in writer_report['fixtures']:
+            validate_parity(record['result'])
+            gate.report.setdefault('evidence', {})[record['path']] = record['sha256']
+            gate.report['evidence'][record['report']] = record['report_sha256']
+        gzip_out = gate.out / 'gzip-writer-parity'
+        gate.run('gzip-writer-oracles', [PYTHON, 'tests/release/gzip_writers.py',
+                                        '--binary', binary, '--out', gzip_out])
+        gzip_report_path = gzip_out / 'report.json'
+        gzip_report = json.loads(gzip_report_path.read_text())
+        if (gzip_report.get('unexpected') != [] or len(gzip_report.get('fixtures', [])) != 32
+                or gzip_report.get('status') not in ('pass', 'with_limitations')):
+            raise RuntimeError('Incomplete GZIP writer qualification')
+        for record in gzip_report['fixtures']:
+            validate_parity(record['result'])
+        gate.report.setdefault('writer_oracles', {})['gzip'] = {'report': str(gzip_report_path), 'sha256': digest(gzip_report_path)}
+        gate.report['limitations'].extend(gzip_report['limitations'])
+        for evidence_directory in (writer_out, gzip_out):
+            for evidence_path in evidence_directory.rglob('*'):
+                if evidence_path.is_file():
+                    gate.report.setdefault('evidence', {})[str(evidence_path)] = digest(evidence_path)
     if not large:
         gate.run('release-regressions', [PYTHON, '-m', 'unittest', 'discover', '-s', 'tests/release', '-p', 'test_*.py'],
                  env=dict(os.environ, PYROQUET_RELEASE_EXPORT=str(binary)))
@@ -294,6 +356,7 @@ def main():
     gate = Gate(out, candidate)
     gate.report['mode'] = 'large' if args.large else 'ordinary'
     gate.report['development'] = args.development
+    gate.report['skip_native'] = args.skip_native
     print('Evidence:', out, flush=True)
     try:
         frozen_exporter = None

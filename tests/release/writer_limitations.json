@@ -1,0 +1,252 @@
+{
+  "fixtures": [
+    {
+      "path": "nested-write-all-v1.parquet",
+      "sha256": "8d51a9ea599a53ca66572bcf88e83c2a823c8732ddb137609285026d57bb9896",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "n0: null mask at 0",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-all-v2.parquet",
+      "sha256": "7b398888c43b260b40bc1ff02e24a9271d3771d6b1585ec96c37e3b61a380a66",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-long.parquet",
+      "sha256": "9f82e2c7004dce9c4248f92e1ee3aee874960107f795c834a5829c9dbf79e8b1",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-required-1.parquet",
+      "sha256": "b708b64151300c1fd1bf0507c33d4e5dd8b54f990b4963d1285485b322e08e0c",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "'a'",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-required-2.parquet",
+      "sha256": "4c0f2707a03247b6ed0d3e7d03ed7fbe6254399736e5afeb0e343b5109d3a388",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "'a'",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-required-3.parquet",
+      "sha256": "0c90877248f05a30df68484260e9c8b2330c6e6e5483afdc65a21aaa74e13c7a",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "'a'",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-struct.parquet",
+      "sha256": "13107cff4ae036496dacaeb5c9621863e0e905d46cae386b91614b8c2c731d47",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 1 but size of corresponding boolean axis is 3",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v1-c0.parquet",
+      "sha256": "e3e1b9d5f18dee162ba3e1101af62a90e73081fe7a868b59e1cb8b555da1299a",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "l: null mask at 0",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v1-c1.parquet",
+      "sha256": "48022f63a4810c085d02349ea1ac412689e671c84b2874a6ff6de1b6e7f6d777",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "l: null mask at 0",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v1-c2.parquet",
+      "sha256": "8e87dd50f081a931e49a92eb1d8cd044c29122a956df0bc0e360317f0331226a",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "l: null mask at 0",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v1-c6.parquet",
+      "sha256": "07b6305e721d244ae21372cb7954166f9c52091eb9b0ecb336f2ded6ce683cc5",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "l: null mask at 0",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v2-c0.parquet",
+      "sha256": "bfd63a440214cba685acc7eb5ceb8873ad40279f754d27f54eeecd8eb0386feb",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v2-c1.parquet",
+      "sha256": "296d1a836a1a1e3bf12ca756d5e16cb678e14590af6f9298d0346aa7f927aa1f",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v2-c2.parquet",
+      "sha256": "c8f245d05e6d95336bf467381a48dfab18034b7ad4455ece3d6ecd1e638a4769",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "nested-write-v2-c6.parquet",
+      "sha256": "2b06e5979832a340fd3b40d0efb1b0727b4f0839d61bbc9dbfc566a6f3bee174",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native writer output: full expected schema/values and native/PyArrow/DuckDB comparisons agree; Fastparquet loses nested representation or rejects this layout. Comparison remains a nonpass."
+    },
+    {
+      "path": "string-nested-v1-c0.parquet",
+      "sha256": "3cd46a4e4790b5ef323926aa81a35611dbe207859816ae681d0d230e661bfc9f",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v1-c1.parquet",
+      "sha256": "703add5e2fe701b67d95d4feb349cc9748a6fd2461d7c582c0fc1610cc66f17b",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v1-c2.parquet",
+      "sha256": "2907297306686365653084544f17168f701516a3dbc225915d5cb1962b851732",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v1-c6.parquet",
+      "sha256": "71153a8259e714435d38c36c669c458e936e664ba4db2ee2a7752183067408f7",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v2-c0.parquet",
+      "sha256": "127463006a76ac3e9b9d2ef0c2a70e5e0ab6cc9fd0f760502adb8f5b631b1aa4",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v2-c1.parquet",
+      "sha256": "2399797bf250bb19246568fa2800919f16982516a8fb60c4b3ee57de6e300652",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v2-c2.parquet",
+      "sha256": "cbea2b66b2cbe746ef806260f7c7dedf36c094109066a8a20a4b6b19eb703728",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "string-nested-v2-c6.parquet",
+      "sha256": "108f721a6f77ab24d7ed2f08d74a5e2f8f7bdce2e0c1701aecfbe08f67b469ac",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v1-c0.parquet",
+      "sha256": "4fbe88447f5c5595aebe56203d56a99a7797fc4966c8198080f7891ab3465e7d",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v1-c1.parquet",
+      "sha256": "ca4d87fe8346da04d9996233ce19f777fcd70d0aa008d3a57391f8b29ea6ef6b",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v1-c2.parquet",
+      "sha256": "cc9d623ecc55a917b0ea6df3bfd2a2e7a45c1a5ec35332709fa5c5cb56db8685",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v1-c6.parquet",
+      "sha256": "dfa5d6b8fbc12e284acec89a46eb083741cfd3e030f1392d206cd3fdb8d9c767",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "labels: null mask at 0",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v2-c0.parquet",
+      "sha256": "98d1aacea2876a45c1fc2b3688c774de365edb9cbe7f4fa85acbaccf600eb1a5",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v2-c1.parquet",
+      "sha256": "e0ccdd91e8290b34e32dbef5df8db67f901a1290d7cfbe49c0019d6c98f34cf4",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v2-c2.parquet",
+      "sha256": "291b87c892f3b14e2859db51e83e22416e2277fff189de62cd4afc9939d34d70",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    },
+    {
+      "path": "enum-nested-v2-c6.parquet",
+      "sha256": "2e0898ae4705d21bca16d15c9402f95b0d9d8e3f3ab2e06bee059de534b17e26",
+      "oracle": "fastparquet",
+      "version": "2026.5.0",
+      "error": "an integer is required",
+      "reason": "Reviewed native STRING/ENUM writer layout: exact independent expected schema/values and native/Arrow/DuckDB values agree; Fastparquet error or nested null/list conflation remains a nonpass."
+    }
+  ]
+}

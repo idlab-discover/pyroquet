@@ -53,7 +53,7 @@ def enum_nested_table() raises -> NestedTable:
 def test_nested_enum_roundtrip_and_projection() raises:
     var table = enum_nested_table()
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var path = (
                 "build/enum-nested-v"
                 + String(version)
@@ -144,7 +144,7 @@ def test_external_nested_dictionary_enums() raises:
         _ = control.leaf(0).enumeration().value(0)
     var expected = enum_nested_table()
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var path = (
                 "build/enums/arrow-nested-v"
                 + String(version)
@@ -210,7 +210,7 @@ def test_nested_reader_mixed_encoding_and_malformed_text() raises:
         "unused-dictionary-utf8",
     ]
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var suffix = "v" + String(version) + "-c" + String(codec)
             for annotation in [
                 String("both"),

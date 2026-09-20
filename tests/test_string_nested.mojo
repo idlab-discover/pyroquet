@@ -44,7 +44,7 @@ def string_nested_table() raises -> NestedTable:
 def test_nested_string_roundtrip_and_projection() raises:
     var table = string_nested_table()
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var path = (
                 "build/string-nested-v"
                 + String(version)
@@ -127,7 +127,7 @@ def test_nested_string_roundtrip_and_projection() raises:
 def test_external_nested_dictionary_strings() raises:
     var expected = string_nested_table()
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var path = (
                 "build/strings/arrow-nested-v"
                 + String(version)
@@ -192,7 +192,7 @@ def test_nested_reader_mixed_encoding_and_malformed_text() raises:
         "dictionary-id",
     ]
     for version in range(1, 3):
-        for codec in range(3):
+        for codec in [0, 1, 2, 6]:
             var suffix = "v" + String(version) + "-c" + String(codec)
             for annotation in [
                 String("both"),

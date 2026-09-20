@@ -36,7 +36,8 @@ def page(kind, body, specific, codec=0, level_bytes=0):
     if codec:
         suffix = body[level_bytes:]
         suffix = (pa.compress(suffix, codec='snappy').to_pybytes()
-                  if codec == 1 else gzip.compress(suffix, mtime=0))
+                  if codec == 1 else pa.compress(suffix, codec='zstd').to_pybytes()
+                  if codec == 6 else gzip.compress(suffix, mtime=0))
         encoded = body[:level_bytes] + suffix
     header = [(1, T.I32, kind), (2, T.I32, len(body)),
               (3, T.I32, len(encoded)),
@@ -115,7 +116,7 @@ def generate():
         records.append(entry)
 
     for version in (1, 2):
-        for codec, compression in enumerate(('NONE', 'SNAPPY', 'GZIP')):
+        for codec, compression in ((0, 'NONE'), (1, 'SNAPPY'), (2, 'GZIP'), (6, 'ZSTD')):
             nested_type = pa.struct([('text', pa.string()), ('labels', pa.list_(pa.string()))])
             pq.write_table(pa.table({'s': pa.array(NESTED_VALUES, type=nested_type)}),
                            OUT / f'arrow-nested-v{version}-c{codec}.parquet',
@@ -250,7 +251,7 @@ def verify(binary):
         results.append(dict(path=str(path), native='pass', oracles=verify_readers(path, expected)))
     # The native test runner writes each page-version/codec combination here.
     for version in (1, 2):
-        for codec in (0, 1, 2):
+        for codec in (0, 1, 2, 6):
             path = OUT / f'native-v{version}-c{codec}.parquet'
             expected = [None if i % 7 == 0 else VALUES[i % len(VALUES)] for i in range(37)]
             pf = fastparquet.ParquetFile(path)
