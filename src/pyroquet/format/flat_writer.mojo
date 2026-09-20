@@ -71,6 +71,7 @@ struct _WrittenField(Copyable, Movable):
     var fixed_width: Int
     var is_string: Bool
     var is_enum: Bool
+    var is_float16: Bool
 
     def __init__(
         out self,
@@ -83,6 +84,7 @@ struct _WrittenField(Copyable, Movable):
         fixed_width: Int,
         is_string: Bool = False,
         is_enum: Bool = False,
+        is_float16: Bool = False,
     ):
         self.name = name^
         self.physical = physical
@@ -93,6 +95,7 @@ struct _WrittenField(Copyable, Movable):
         self.fixed_width = fixed_width
         self.is_string = is_string
         self.is_enum = is_enum
+        self.is_float16 = is_float16
 
 
 def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
@@ -112,6 +115,13 @@ def _write_schema_field(mut writer: CompactWriter, field: _WrittenField) raises:
         writer.write_field(10, CompactType.STRUCT)  # LogicalType
         writer.begin_struct()
         writer.write_field(4 if field.is_enum else 1, CompactType.STRUCT)
+        writer.begin_struct()
+        writer.end_struct()
+        writer.end_struct()
+    elif field.is_float16:
+        writer.write_field(10, CompactType.STRUCT)
+        writer.begin_struct()
+        writer.write_field(15, CompactType.STRUCT)  # FLOAT16: no ConvertedType
         writer.begin_struct()
         writer.end_struct()
         writer.end_struct()
@@ -225,11 +235,19 @@ def _numeric_footer(
     groups: List[_WrittenGroup],
     max_bytes: Int,
     codec: Int = 0,
+    is_float16: Bool = False,
 ) raises -> List[UInt8]:
     var fields = List[_WrittenField]()
     fields.append(
         _WrittenField(
-            name.copy(), physical, integer_width, signed, nullable, codec, 0
+            name.copy(),
+            physical,
+            integer_width,
+            signed,
+            nullable,
+            codec,
+            2 if is_float16 else 0,
+            is_float16=is_float16,
         )
     )
     return _table_footer(fields, rows, groups, len(groups), max_bytes)

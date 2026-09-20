@@ -96,6 +96,7 @@ def _check_numeric[dtype: DType]():
         or dtype == DType.uint32
         or dtype == DType.int64
         or dtype == DType.uint64
+        or dtype == DType.float16
         or dtype == DType.float32
         or dtype == DType.float64
     ), "Unsupported numeric dtype"

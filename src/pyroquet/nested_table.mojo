@@ -95,6 +95,7 @@ def _column_valid(column: Column, row: Int) raises -> Bool:
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )

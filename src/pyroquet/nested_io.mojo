@@ -65,7 +65,11 @@ def _leaf_overhead(kind: Int, count: Int, budget: Int) raises -> Int:
     var width = 8
     if kind == SchemaNode.INT8 or kind == SchemaNode.UINT8:
         width = 1
-    elif kind == SchemaNode.INT16 or kind == SchemaNode.UINT16:
+    elif (
+        kind == SchemaNode.INT16
+        or kind == SchemaNode.UINT16
+        or kind == SchemaNode.FLOAT16
+    ):
         width = 2
     elif (
         kind == SchemaNode.INT32
@@ -93,6 +97,7 @@ def _kind(node: SchemaElement) -> Int:
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )
@@ -526,14 +531,16 @@ def _read_numeric[
                     pos + 1, len(data), Int(data[pos]), present
                 )
             elif h.encoding == 5:
-                comptime if dtype == DType.float32 or dtype == DType.float64:
+                comptime if dtype == DType.float16 or dtype == DType.float32 or dtype == DType.float64:
                     raise Error("Delta requires physical INT32/INT64")
                 else:
                     delta = _DeltaDecoder[
                         64 if size_of[Scalar[dtype]]() == 8 else 32
                     ](data, pos, len(data), present)
             elif h.encoding == 0:
-                comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+                comptime width = 2 if dtype == DType.float16 else (
+                    8 if size_of[Scalar[dtype]]() == 8 else 4
+                )
                 if (len(data) - pos) % width != 0 or (
                     len(data) - pos
                 ) // width != present:
@@ -563,7 +570,9 @@ def _read_numeric[
                         value = _delta_value[dtype](delta.next(data))
                     else:
                         value = _plain_value[dtype](data, pos)
-                        pos += 8 if size_of[Scalar[dtype]]() == 8 else 4
+                        pos += 2 if dtype == DType.float16 else (
+                            8 if size_of[Scalar[dtype]]() == 8 else 4
+                        )
                 else:
                     nulls += 1
                 values.unsafe_ptr()[unsafe_offset=output] = value
@@ -782,6 +791,7 @@ def load_nested_table(
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )

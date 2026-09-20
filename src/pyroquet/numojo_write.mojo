@@ -9,7 +9,11 @@ from .format.page_write import NumericWriteOptions, _append_u32, _write_page
 
 def _append_plain[dtype: DType](mut bytes: List[UInt8], value: Scalar[dtype]):
     _check_numeric[dtype]()
-    comptime if size_of[Scalar[dtype]]() == 8:
+    comptime if dtype == DType.float16:
+        var bits = bitcast[DType.uint16](value)
+        bytes.append(UInt8(bits))
+        bytes.append(UInt8(bits >> 8))
+    elif size_of[Scalar[dtype]]() == 8:
         var bits = bitcast[DType.uint64](value)
         comptime for j in range(8):
             bytes.append(UInt8(bits >> UInt64(j * 8)))
@@ -40,7 +44,9 @@ def _numeric_page[
     ):
         raise Error("Invalid numeric page range")
     var bytes = List[UInt8]()
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     var level_bytes = 0
     var groups = count // 8 + Int(count % 8 != 0)
     var header = UInt32(groups * 2 + 1)
@@ -96,7 +102,9 @@ def _write_numeric_chunk[
     mut offset: Int64,
 ) raises -> _WrittenGroup:
     """Emit one borrowed row range, retaining only bounded page staging."""
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     var group_offset = offset
     var written = 0
     var nulls = 0
@@ -146,7 +154,9 @@ def save_numeric[
     Publication requires same-filesystem hard links; crash durability is not promised.
     """
     _check_numeric[dtype]()
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     options.validate(width, column.size(), column.null_count())
     var name = column.name()
     if name.byte_length() == 0:
@@ -169,11 +179,19 @@ def save_numeric[
             )
         )
         start += count
-    comptime physical = (4 if dtype == DType.float32 else 5) if (
-        dtype == DType.float32 or dtype == DType.float64
-    ) else (2 if width == 8 else 1)
+    comptime physical = (
+        7 if dtype == DType.float16 else (4 if dtype == DType.float32 else 5)
+    ) if (
+        dtype == DType.float16
+        or dtype == DType.float32
+        or dtype == DType.float64
+    ) else (
+        2 if width == 8 else 1
+    )
     comptime integer_width = 0 if (
-        dtype == DType.float32 or dtype == DType.float64
+        dtype == DType.float16
+        or dtype == DType.float32
+        or dtype == DType.float64
     ) else size_of[Scalar[dtype]]() * 8
     var footer = _numeric_footer(
         name,
@@ -185,6 +203,7 @@ def save_numeric[
         groups,
         options.max_metadata_bytes,
         options.codec,
+        dtype == DType.float16,
     )
     if Int64(len(footer)) + 8 > Int64.MAX - offset:
         raise Error("Output file offset overflow")

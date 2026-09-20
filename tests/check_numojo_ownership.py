@@ -48,7 +48,7 @@ def main() raises:
 
 def main():
     out=ROOT/'build/numojo-ownership';out.mkdir(parents=True,exist_ok=True)
-    for dtype in ('int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'float32', 'float64'):
+    for dtype in ('int8', 'uint8', 'int16', 'uint16', 'int32', 'uint32', 'int64', 'uint64', 'float16', 'float32', 'float64'):
       prelude = PRELUDE.replace('import NumojoUInt32Column', 'import NumericColumn').replace('NumojoUInt32Column', f'NumericColumn[DType.{dtype}]').replace('DType.uint32', f'DType.{dtype}')
       for name,(valid,source) in CASES.items():
         name = dtype + '-' + name
@@ -59,7 +59,7 @@ def main():
         assert (r.returncode==0)==valid,(name,r.stdout,r.stderr)
         if not valid:assert 'error:' in r.stderr
         print('PASS',name,flush=True)
-    for dtype in ('bool', 'float16'):
+    for dtype in ('bool',):
         path = out / (dtype + '-unsupported.mojo')
         path.write_text('from pyroquet.numojo_io import load_numeric\ndef main() raises:\n    _ = load_numeric[DType.' + dtype + '] ("unused", "x")\n')
         r = subprocess.run(['pixi', 'run', 'mojo', 'build', '-I', 'src', '-I', '../NuMojo', str(path), '-o', str(out / dtype)], cwd=ROOT, text=True, capture_output=True)

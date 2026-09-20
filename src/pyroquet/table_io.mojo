@@ -73,6 +73,7 @@ def load_table(
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )

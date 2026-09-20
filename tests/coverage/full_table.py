@@ -10,7 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[2]
 KINDS = {1: 'uint32', 2: 'int8', 3: 'uint8', 4: 'int16', 5: 'uint16',
-         6: 'int32', 7: 'int64', 8: 'uint64', 9: 'float32', 10: 'float64',
+         6: 'int32', 7: 'int64', 8: 'uint64', 9: 'float32', 10: 'float64', 17: 'float16',
          11: 'bool', 12: 'binary', 13: 'fixed_binary'}
 
 
@@ -120,6 +120,8 @@ def _arrow_export(table, nullable=None):
             kind, width = 'bool', 0
         elif pa.types.is_integer(dtype):
             kind, width = str(dtype), 0
+        elif pa.types.is_float16(dtype):
+            kind, width = 'float16', 0
         elif pa.types.is_float32(dtype):
             kind, width = 'float32', 0
         elif pa.types.is_float64(dtype):
@@ -169,14 +171,14 @@ def _fastparquet_export(path, columns=None):
         if kind not in KINDS.values():
             limitations.append(f'{name}: pandas dtype {dtype} does not preserve native type')
         values = []
-        bits = series.to_numpy().view('uint' + kind[5:]) if kind in ('float32', 'float64') else None
+        bits = series.to_numpy().view('uint' + kind[5:]) if kind in ('float16', 'float32', 'float64') else None
         for row, value in enumerate(series):
             if value is None or value is pd.NA:
                 values.append(None)
             elif isinstance(value, (float, np.floating)):
                 if math.isnan(value) and nullable:
                     limitations.append(f'{name}: pandas NaN cannot distinguish null from valid NaN')
-                if kind in ('float32', 'float64'):
+                if kind in ('float16', 'float32', 'float64'):
                     values.append(int(bits[row]))
                 else:
                     values.append(None if math.isnan(value) else int(value))

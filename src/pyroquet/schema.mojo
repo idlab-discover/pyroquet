@@ -25,6 +25,7 @@ struct SchemaNode(Copyable, Movable):
     comptime LIST = 14
     comptime STRING = 15
     comptime ENUM = 16
+    comptime FLOAT16 = 17
 
     var _name: String
     var _kind: Int
@@ -70,6 +71,8 @@ struct SchemaNode(Copyable, Movable):
             return Self.INT64
         comptime if dtype == DType.uint64:
             return Self.UINT64
+        comptime if dtype == DType.float16:
+            return Self.FLOAT16
         comptime if dtype == DType.float32:
             return Self.FLOAT32
         comptime if dtype == DType.float64:
@@ -93,6 +96,8 @@ struct SchemaNode(Copyable, Movable):
             return DType.int64
         if self._kind == Self.UINT64:
             return DType.uint64
+        if self._kind == Self.FLOAT16:
+            return DType.float16
         if self._kind == Self.FLOAT32:
             return DType.float32
         if self._kind == Self.FLOAT64:
@@ -141,7 +146,7 @@ struct Schema(Copyable, Movable, Sized):
                 raise Error("Primitive schema node cannot have children")
             if (
                 nodes[i].kind() < SchemaNode.GROUP
-                or nodes[i].kind() > SchemaNode.ENUM
+                or nodes[i].kind() > SchemaNode.FLOAT16
             ):
                 raise Error("Unsupported schema type")
             if nodes[i].kind() == SchemaNode.FIXED_BINARY:

@@ -83,16 +83,18 @@ def _nested_field(
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )
-    comptime for t in range(10):
+    comptime for t in range(len(types)):
         comptime dtype = types[t]
         if node.kind() == SchemaNode.numeric_kind[dtype]():
-            comptime floating = dtype == DType.float32 or dtype == DType.float64
-            physical = (4 if dtype == DType.float32 else 5) if floating else (
-                2 if size_of[Scalar[dtype]]() == 8 else 1
-            )
+            comptime floating = dtype == DType.float16 or dtype == DType.float32 or dtype == DType.float64
+            physical = (
+                7 if dtype
+                == DType.float16 else (4 if dtype == DType.float32 else 5)
+            ) if floating else (2 if size_of[Scalar[dtype]]() == 8 else 1)
             width = 0 if floating else size_of[Scalar[dtype]]() * 8
             signed = dtype.is_signed()
     if (
@@ -110,9 +112,10 @@ def _nested_field(
         signed,
         node.nullable(),
         codec,
-        node.fixed_width(),
+        2 if node.kind() == SchemaNode.FLOAT16 else node.fixed_width(),
         node.kind() == SchemaNode.STRING,
         node.kind() == SchemaNode.ENUM,
+        node.kind() == SchemaNode.FLOAT16,
     )
 
 
@@ -123,7 +126,7 @@ def _nested_valid(column: Column, index: Int) raises -> Bool:
         return column.string().is_valid(index)
     if column.kind() == SchemaNode.BOOLEAN:
         return Bool(column.boolean().value(index))
-    if column.kind() >= SchemaNode.BINARY:
+    if SchemaNode.BINARY <= column.kind() <= SchemaNode.ENUM:
         return column.binary().is_valid(index)
     comptime types = (
         DType.int8,
@@ -134,10 +137,11 @@ def _nested_valid(column: Column, index: Int) raises -> Bool:
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )
-    comptime for t in range(10):
+    comptime for t in range(len(types)):
         comptime dtype = types[t]
         if column.kind() == SchemaNode.numeric_kind[dtype]():
             return Bool(column.numeric[dtype]().value(index))
@@ -158,7 +162,7 @@ def _nested_value(
             bytes.append(0)
         if column.boolean().value(index).value():
             bytes[len(bytes) - 1] |= UInt8(1) << UInt8(present % 8)
-    elif column.kind() >= SchemaNode.BINARY:
+    elif SchemaNode.BINARY <= column.kind() <= SchemaNode.ENUM:
         var value = column._byte_value(index)
         var prefix = 0 if column.kind() == SchemaNode.FIXED_BINARY else 4
         if len(value) > limit - len(bytes) - prefix:
@@ -179,13 +183,16 @@ def _nested_value(
             DType.uint32,
             DType.int64,
             DType.uint64,
+            DType.float16,
             DType.float32,
             DType.float64,
         )
-        comptime for t in range(10):
+        comptime for t in range(len(types)):
             comptime dtype = types[t]
             if column.kind() == SchemaNode.numeric_kind[dtype]():
-                comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+                comptime width = 2 if dtype == DType.float16 else (
+                    8 if size_of[Scalar[dtype]]() == 8 else 4
+                )
                 if width > limit - len(bytes):
                     raise Error("Nested values exceed page byte budget")
                 _append_plain[dtype](

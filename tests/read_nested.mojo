@@ -34,24 +34,50 @@ def main() raises:
     var table = load_nested_table(args[1], projection=selection^)
     var schema = table.schema()
     print(table.num_rows(), len(schema) - 1)
-    comptime types = (DType.int8, DType.uint8, DType.int16, DType.uint16,
-        DType.int32, DType.uint32, DType.int64, DType.uint64,
-        DType.float32, DType.float64)
+    comptime types = (
+        DType.int8,
+        DType.uint8,
+        DType.int16,
+        DType.uint16,
+        DType.int32,
+        DType.uint32,
+        DType.int64,
+        DType.uint64,
+        DType.float16,
+        DType.float32,
+        DType.float64,
+    )
     for n in range(1, len(schema)):
         var node = schema.node(n)
         var name = node.name()
         print(hex_bytes(name.as_bytes()))
         if node.kind() == SchemaNode.GROUP or node.kind() == SchemaNode.LIST:
             ref structure = table.structure(n)
-            print(node.kind(), node.parent(), Int(node.nullable()), node.fixed_width(), structure.size())
+            print(
+                node.kind(),
+                node.parent(),
+                Int(node.nullable()),
+                node.fixed_width(),
+                structure.size(),
+            )
             for row in range(structure.size()):
                 if node.kind() == SchemaNode.LIST:
-                    print(Int(structure.is_valid(row)), structure.offset(row), structure.offset(row + 1))
+                    print(
+                        Int(structure.is_valid(row)),
+                        structure.offset(row),
+                        structure.offset(row + 1),
+                    )
                 else:
                     print(Int(structure.is_valid(row)))
         else:
             ref leaf = table.leaf(table.leaf_index(n))
-            print(node.kind(), node.parent(), Int(node.nullable()), node.fixed_width(), leaf.size())
+            print(
+                node.kind(),
+                node.parent(),
+                Int(node.nullable()),
+                node.fixed_width(),
+                leaf.size(),
+            )
             if node.kind() == SchemaNode.BOOLEAN:
                 ref column = leaf.boolean()
                 for i in range(leaf.size()):
@@ -60,7 +86,10 @@ def main() raises:
                         print(Int(value.value()))
                     else:
                         print("null")
-            elif node.kind() == SchemaNode.BINARY or node.kind() == SchemaNode.FIXED_BINARY:
+            elif (
+                node.kind() == SchemaNode.BINARY
+                or node.kind() == SchemaNode.FIXED_BINARY
+            ):
                 ref column = leaf.binary()
                 for i in range(leaf.size()):
                     if column.is_valid(i):
@@ -77,7 +106,9 @@ def main() raises:
                             if not value:
                                 print("null")
                             else:
-                                comptime if dtype == DType.float32:
+                                comptime if dtype == DType.float16:
+                                    print(bitcast[DType.uint16](value.value()))
+                                elif dtype == DType.float32:
                                     print(bitcast[DType.uint32](value.value()))
                                 elif dtype == DType.float64:
                                     print(bitcast[DType.uint64](value.value()))

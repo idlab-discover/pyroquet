@@ -12,7 +12,9 @@ def read[dtype: DType](path: String, name: String, budget: Int) raises:
         if not value:
             print("null")
         else:
-            comptime if dtype == DType.float32:
+            comptime if dtype == DType.float16:
+                print(bitcast[DType.uint16](value.value()))
+            elif dtype == DType.float32:
                 print(bitcast[DType.uint32](value.value()))
             elif dtype == DType.float64:
                 print(bitcast[DType.uint64](value.value()))
@@ -34,6 +36,7 @@ def main() raises:
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )

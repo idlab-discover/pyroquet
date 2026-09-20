@@ -30,7 +30,14 @@ from .numeric_column import NumericColumn, NumojoUInt32Column, _check_numeric
 
 def _matches_numeric[dtype: DType](node: SchemaElement) -> Bool:
     _check_numeric[dtype]()
-    comptime if dtype == DType.float32 or dtype == DType.float64:
+    comptime if dtype == DType.float16:
+        return (
+            node.physical_type == 7
+            and node.type_length == 2
+            and node.logical_type == 15
+            and node.converted_type == -1
+        )
+    elif dtype == DType.float32 or dtype == DType.float64:
         return (
             node.physical_type == (4 if dtype == DType.float32 else 5)
             and node.logical_type == -1
@@ -59,10 +66,16 @@ def _plain_value[
     dtype: DType
 ](bytes: List[UInt8], offset: Int) raises -> Scalar[dtype]:
     _check_numeric[dtype]()
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     if offset < 0 or offset > len(bytes) or len(bytes) - offset < width:
         raise Error("Truncated numeric payload")
-    comptime if width == 8:
+    comptime if dtype == DType.float16:
+        return bitcast[dtype](
+            UInt16(bytes[offset]) | (UInt16(bytes[offset + 1]) << 8)
+        )
+    elif width == 8:
         var bits = UInt64(0)
         comptime for j in range(8):
             bits |= UInt64(bytes[offset + j]) << UInt64(j * 8)
@@ -100,7 +113,9 @@ def _decode_plain_values[
     result, which must not be published. Scalars require no destruction.
     """
     _check_numeric[dtype]()
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     if (
         start < 0
         or start > len(bytes)
@@ -199,7 +214,8 @@ def _decode_numeric_page_impl[
     var data_start = framing[0]
     var present = framing[1]
     if not indexed and len(bytes) - data_start != present * (
-        8 if size_of[Scalar[dtype]]() == 8 else 4
+        2 if dtype
+        == DType.float16 else (8 if size_of[Scalar[dtype]]() == 8 else 4)
     ):
         raise Error("PLAIN byte length disagrees with non-null value count")
     var nulls = h.num_values - present
@@ -244,7 +260,9 @@ def _decode_numeric_page_impl[
                 value = dictionary[Int(index)]
             else:
                 value = _plain_value[dtype](bytes, pos)
-                pos += 8 if size_of[Scalar[dtype]]() == 8 else 4
+                pos += 2 if dtype == DType.float16 else (
+                    8 if size_of[Scalar[dtype]]() == 8 else 4
+                )
         pointer[unsafe_offset=output + i] = value
     if indexed:
         ids.finish()
@@ -280,7 +298,7 @@ def _decode_delta_page[
     mut bitmap: List[UInt8],
     output: Int,
 ) raises -> Int:
-    comptime if dtype == DType.float32 or dtype == DType.float64:
+    comptime if dtype == DType.float16 or dtype == DType.float32 or dtype == DType.float64:
         raise Error("DELTA_BINARY_PACKED requires physical INT32 or INT64")
     else:
         if (
@@ -375,7 +393,9 @@ def _plain_dictionary[
     """Validate byte length before allocation; return only initialized scalars.
     """
     _check_numeric[dtype]()
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     if count < 0 or count != len(bytes) // width or len(bytes) % width != 0:
         raise Error("Dictionary byte length disagrees with entry count")
     # Length is deliberately uninitialized. No readable Span, growth, or
@@ -387,7 +407,9 @@ def _plain_dictionary[
 
 def _check_dictionary_header[dtype: DType](h: PageHeader, limit: Int) raises:
     # Validate cardinality against physical bytes before decompression/allocation.
-    comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+    comptime width = 2 if dtype == DType.float16 else (
+        8 if size_of[Scalar[dtype]]() == 8 else 4
+    )
     if h.encoding != 0 and h.encoding != 2:
         raise Error("Dictionary entries require PLAIN encoding")
     if h.num_values < 0 or h.num_values > limit // width:

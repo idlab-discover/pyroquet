@@ -113,6 +113,7 @@ struct Column(Movable):
         NumericColumn[DType.uint32],
         NumericColumn[DType.int64],
         NumericColumn[DType.uint64],
+        NumericColumn[DType.float16],
         NumericColumn[DType.float32],
         NumericColumn[DType.float64],
         BooleanColumn,
@@ -262,7 +263,7 @@ struct Column(Movable):
         self._data[EnumColumn].set_index(row, code)
 
     def dtype(self) raises -> DType:
-        if self._kind >= SchemaNode.BOOLEAN:
+        if SchemaNode.BOOLEAN <= self._kind <= SchemaNode.ENUM:
             raise Error("Non-numeric column has no numeric dtype")
         return self._dtype
 

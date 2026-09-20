@@ -88,6 +88,7 @@ def save_table(
         DType.uint32,
         DType.int64,
         DType.uint64,
+        DType.float16,
         DType.float32,
         DType.float64,
     )
@@ -109,16 +110,19 @@ def save_table(
         var name = node.name()
         if name.byte_length() == 0:
             raise Error("Output column name must be nonempty")
-        comptime for t in range(10):
+        comptime for t in range(len(types)):
             comptime dtype = types[t]
             if table.column(c).kind() == SchemaNode.numeric_kind[dtype]():
-                comptime width = 8 if size_of[Scalar[dtype]]() == 8 else 4
+                comptime width = 2 if dtype == DType.float16 else (
+                    8 if size_of[Scalar[dtype]]() == 8 else 4
+                )
                 numeric_options.validate(
                     width, rows, table.column(c).null_count()
                 )
-                comptime floating = dtype == DType.float32 or dtype == DType.float64
+                comptime floating = dtype == DType.float16 or dtype == DType.float32 or dtype == DType.float64
                 comptime physical = (
-                    4 if dtype == DType.float32 else 5
+                    7 if dtype
+                    == DType.float16 else (4 if dtype == DType.float32 else 5)
                 ) if floating else (2 if width == 8 else 1)
                 comptime integer_width = 0 if floating else size_of[
                     Scalar[dtype]
@@ -131,10 +135,11 @@ def save_table(
                         dtype.is_signed(),
                         node.nullable(),
                         setting.codec,
-                        0,
+                        2 if dtype == DType.float16 else 0,
+                        is_float16=dtype == DType.float16,
                     )
                 )
-        if node.kind() >= SchemaNode.BOOLEAN:
+        if SchemaNode.BOOLEAN <= node.kind() <= SchemaNode.ENUM:
             numeric_options.validate(0, rows, table.column(c).null_count())
             var physical = 0 if node.kind() == SchemaNode.BOOLEAN else (
                 7 if node.kind() == SchemaNode.FIXED_BINARY else 6
@@ -162,7 +167,7 @@ def save_table(
     while start < rows:
         var count = min(options.row_group_rows, rows - start)
         for c in range(columns):
-            if table.column(c).kind() >= SchemaNode.BOOLEAN:
+            if SchemaNode.BOOLEAN <= table.column(c).kind() <= SchemaNode.ENUM:
                 chunks.append(
                     _write_binary_chunk(
                         file,
@@ -174,7 +179,7 @@ def save_table(
                     )
                 )
                 continue
-            comptime for t in range(10):
+            comptime for t in range(len(types)):
                 comptime dtype = types[t]
                 if table.column(c).kind() == SchemaNode.numeric_kind[dtype]():
                     chunks.append(
