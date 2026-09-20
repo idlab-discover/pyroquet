@@ -1,4 +1,4 @@
-"""Owned numeric storage with immutable, origin-tied borrowing."""
+"""Shared numeric value storage with independent, immutable validity."""
 from numojo.core.ndarray import NDArray
 
 
@@ -43,8 +43,21 @@ struct NumericColumn[dtype: DType](Movable):
         self._null_count = null_count
 
     def values(self) -> ref[origin_of(self._values)] NDArray[Self.dtype]:
-        """Borrow numeric storage read-only; consult validity for nulls."""
+        """Borrow the handle; shared aliases can mutate its value allocation."""
         return self._values
+
+    def values_mut(self) raises -> NDArray[Self.dtype]:
+        """Return a retained shared handle for in-place NuMojo operations.
+
+        Handle layout/reassignment is local; payload changes are visible to all
+        aliases. Null payloads may change without changing validity. Callers must
+        exclude concurrent mutation during reads and saves.
+        """
+        var handle = self._values.view_with_layout(
+            self._values.shape, self._values.strides, self._values.offset
+        )
+        handle.flags.WRITEABLE = True
+        return handle^
 
     def validity(self) -> Span[UInt8, origin_of(self._validity)]:
         """LSB-first packed validity; empty means all valid."""

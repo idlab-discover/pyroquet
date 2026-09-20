@@ -4,6 +4,7 @@ GROUP means a non-repeated STRUCT. LIST has one primitive child; wire wrappers
 are not logical schema nodes. Struct children retain a slot for every parent;
 list offsets address compact element slots. Absent ancestors mask descendants.
 """
+from numojo.core.ndarray import NDArray
 from std.sys import size_of
 from .schema import Schema, SchemaNode
 from .table import Column
@@ -224,3 +225,12 @@ struct NestedTable(Movable):
         ):
             raise Error("Schema node is not a nested structure")
         return self._structures[self._structure_indices[schema_index]]
+
+    def values_mut[dtype: DType](self, index: Int) raises -> NDArray[dtype]:
+        """Retain a shared numeric value handle; schema/validity stay fixed."""
+        return self.leaf(index).values_mut[dtype]()
+
+    def set_enum_index(mut self, index: Int, row: Int, code: UInt32) raises:
+        if index < 0 or index >= len(self._leaves):
+            raise Error("Column index out of range")
+        self._leaves[index].set_enum_index(row, code)

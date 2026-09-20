@@ -1,4 +1,4 @@
-"""Compile gates for exclusively owned enum indices and immutable label borrows."""
+"""Compile gates for bounded enum index reads and immutable label borrows."""
 
 from pathlib import Path
 import subprocess
@@ -65,7 +65,7 @@ def main() raises:
     var c = column()
     c.indices().validity()[0] = 0
 """),
-    "move_borrowed_indices": (False, """
+    "move_index_view": (True, """
 def main() raises:
     var c = column()
     var moved = c.indices()^

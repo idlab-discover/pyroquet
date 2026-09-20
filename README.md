@@ -196,10 +196,20 @@ signed zero and NaN payloads. Output budgets use destination element size.
 `load_uint32` remains a compatibility shorthand for `load_numeric[DType.uint32]`.
 
 The returned movable `NumericColumn[dtype]` owns a NuMojo allocation plus packed
-validity. `values()` borrows the numerical array read-only without copying;
+validity. `values()` borrows the array handle without copying, but does not make
+its shared allocation immutable. `values_mut()` returns a retained shared NuMojo
+handle: `fill`, `store` and other in-place operations change column values.
+`Column.values_mut[dtype]()`, `Table.values_mut[dtype](index)` and
+`NestedTable.values_mut[dtype](leaf_index)` provide the same access. Replacing or
+reshaping a returned handle cannot change the column row count or schema.
+Aliases observe value changes and remain live even after the column is destroyed.
+Callers must avoid concurrent mutation during reads or saves;
+
 `validity()` borrows the LSB-first bitmap (empty means all valid). `value(i)`
 returns an optional `Scalar[dtype]`, and `size()` / `null_count()` expose counts.
-Null slots contain zero; **NuMojo operations do not automatically apply validity**.
+Loaded null slots contain zero; **NuMojo operations do not automatically apply
+validity**. Operations may change null-slot payloads, but validity stays fixed and
+writers never serialize those payloads as present values.
 The loader fills the final allocation directly, with bounded page buffers and no
 intermediate full-column value array. A private dictionary is released at each
 chunk boundary. Its physical and decoded size is bounded by
@@ -475,13 +485,19 @@ print(column.enumeration().value(3))
 
 Use `SchemaNode("color", SchemaNode.ENUM, 0, nullable=True)` for this column.
 `enumeration()` returns an immutable borrow; `labels()` borrows a `StringColumn`
-and `indices()` borrows `NumericColumn[DType.uint32]`. Its packed validity
+and `indices()` returns origin-bound scalar/span reads. Its packed validity
 distinguishes null indices from index zero. `is_valid(row)` checks presence;
 `value(row)` returns an owned stdlib String and raises on null or out-of-range
 access. ENUM rejects ordinary `string()`, `binary()`, and `numeric[...]()` column
 borrows. `EnumColumn(labels^, indices^)` also accepts directly constructed storage
 and checks that labels are unique and non-null and all present indices are valid.
-The column is move-only; its numojo index allocation remains exclusively owned.
+The column is move-only. The public constructor snapshots supplied indices so
+previously retained NuMojo aliases cannot invalidate dictionary bounds. Builders
+adopt their fresh allocations internally. `set_index(row, code)` changes only an
+existing non-null row and rejects out-of-range codes before modifying storage.
+`Column.set_enum_index(row, code)` and table/nested-table
+`set_enum_index(column_or_leaf, row, code)` expose the same checked update.
+Vocabulary and validity editing are outside this release.
 
 The builder requires the final row count and consumes itself on `freeze()`.
 It interns exact UTF-8 bytes into one label arena, including empty strings and

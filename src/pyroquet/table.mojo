@@ -1,11 +1,12 @@
 """Owned mixed scalar tables and legacy chunked UInt32 construction helpers.
 
-Numeric tables borrow typed storage immutably. Validity is packed LSB-first;
+Numeric values use shared NuMojo storage. Validity is packed LSB-first;
 absent bitmaps mean all values are present. Schema owns field nullability.
 """
 
 from std.utils import Variant
 from numojo.routines.creation import empty
+from numojo.core.ndarray import NDArray
 from .numeric_column import NumericColumn
 from .binary_column import BinaryColumn
 from .string_column import StringColumn
@@ -100,7 +101,8 @@ struct UInt32Column(Copyable, Movable, Sized):
 
 
 struct Column(Movable):
-    """Own one scalar column and expose checked immutable typed borrows."""
+    """Own one scalar column with checked typed access and shared numeric values.
+    """
 
     var _data: Variant[
         NumericColumn[DType.int8],
@@ -250,6 +252,15 @@ struct Column(Movable):
             raise Error("Column dtype does not match requested borrow")
         return self._data[NumericColumn[dtype]]
 
+    def values_mut[dtype: DType](self) raises -> NDArray[dtype]:
+        """Retain shared numeric values without exposing column replacement."""
+        return self.numeric[dtype]().values_mut()
+
+    def set_enum_index(mut self, row: Int, code: UInt32) raises:
+        if self._kind != SchemaNode.ENUM:
+            raise Error("Column is not ENUM")
+        self._data[EnumColumn].set_index(row, code)
+
     def dtype(self) raises -> DType:
         if self._kind >= SchemaNode.BOOLEAN:
             raise Error("Non-numeric column has no numeric dtype")
@@ -270,7 +281,7 @@ struct Column(Movable):
 
 
 struct Table(Movable):
-    """Own a validated flat mixed scalar table with immutable typed borrowing.
+    """Own a validated flat mixed scalar table with shared numeric value access.
 
     Schema supplies names, order and nullability. Explicit row counts preserve
     zero-column projection shape. Storage moves into the table without copies.
@@ -364,3 +375,12 @@ struct Table(Movable):
         if index < 0 or index >= len(self._columns):
             raise Error("Column index out of range")
         return self._columns[index]
+
+    def values_mut[dtype: DType](self, index: Int) raises -> NDArray[dtype]:
+        """Retain a shared numeric value handle; schema/validity stay fixed."""
+        return self.column(index).values_mut[dtype]()
+
+    def set_enum_index(mut self, index: Int, row: Int, code: UInt32) raises:
+        if index < 0 or index >= len(self._columns):
+            raise Error("Column index out of range")
+        self._columns[index].set_enum_index(row, code)

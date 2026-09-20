@@ -7,6 +7,7 @@ version = "0.1.0"
 preview = ["pixi-build"]
 
 [tasks]
+test-numeric-mutation = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_numeric_mutation.mojo"
 test-failure-propagation = "python tests/check_test_failures.py"
 test-enum-column = "mojo run -D ASSERT=all -I src -I ../NuMojo tests/test_enum_column.mojo"
 generate-enum-fixtures = "build/oracle-uv/bin/python tests/enum_fixture_oracle.py --generate"
