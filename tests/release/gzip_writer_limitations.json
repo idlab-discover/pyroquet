@@ -1,0 +1,52 @@
+{
+  "fixtures": [
+    {
+      "path": "v2_mixed_plain_gzip.parquet",
+      "sha256": "1ab063f8dde95bca1550c935cb3ab5b9fb93c7f9f2427f62c625bb6669d0181f",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 61",
+      "control_sha256": "4560f8724cdc54c2974d5d5828189ef89e5ad63fa47beeefa7109c9826fa5fed",
+      "reason": "Fastparquet V2 nullable multi-page reader uses a row-group validity mask on a page-sized destination; same exact error reproduces with uncompressed native output."
+    },
+    {
+      "path": "v2_mixed_plain_mixed.parquet",
+      "sha256": "a85c90840b33bc23bba961074a28d2260391da59215a8b61d8c0d637835bd637",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 61",
+      "control_sha256": "4560f8724cdc54c2974d5d5828189ef89e5ad63fa47beeefa7109c9826fa5fed",
+      "reason": "Fastparquet V2 nullable multi-page reader uses a row-group validity mask on a page-sized destination; same exact error reproduces with uncompressed native output."
+    },
+    {
+      "path": "v2_mixed_dict_gzip.parquet",
+      "sha256": "1ab063f8dde95bca1550c935cb3ab5b9fb93c7f9f2427f62c625bb6669d0181f",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 61",
+      "control_sha256": "4560f8724cdc54c2974d5d5828189ef89e5ad63fa47beeefa7109c9826fa5fed",
+      "reason": "Fastparquet V2 nullable multi-page reader uses a row-group validity mask on a page-sized destination; same exact error reproduces with uncompressed native output."
+    },
+    {
+      "path": "v2_mixed_dict_mixed.parquet",
+      "sha256": "a85c90840b33bc23bba961074a28d2260391da59215a8b61d8c0d637835bd637",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 61",
+      "control_sha256": "4560f8724cdc54c2974d5d5828189ef89e5ad63fa47beeefa7109c9826fa5fed",
+      "reason": "Fastparquet V2 nullable multi-page reader uses a row-group validity mask on a page-sized destination; same exact error reproduces with uncompressed native output."
+    },
+    {
+      "path": "v2_all_null_dict_gzip.parquet",
+      "sha256": "16c4047185cdc72ec1246304ff8efa96e4fe22f30b0a387e206fca068d8ed584",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 33",
+      "control_sha256": "c3848a48cdf0e4b8ba8d63e0ace0379bb393c6828ba2ac6004f32cca13df6376",
+      "reason": "Fastparquet V2 nullable multi-page reader uses a row-group validity mask on a page-sized destination; same exact error reproduces with uncompressed native output."
+    },
+    {
+      "path": "v2_all_null_dict_mixed.parquet",
+      "sha256": "c1df1dc00918b99c6d71577cc7345ef9143a4bc472d58a443b68a3c349fdef33",
+      "version": "2026.5.0",
+      "error": "boolean index did not match indexed array along axis 0; size of axis is 7 but size of corresponding boolean axis is 33",
+      "control_sha256": "c3848a48cdf0e4b8ba8d63e0ace0379bb393c6828ba2ac6004f32cca13df6376",
+      "reason": "Fastparquet V2 nullable multi-page reader uses a row-group validity mask on a page-sized destination; same exact error reproduces with uncompressed native output."
+    }
+  ]
+}

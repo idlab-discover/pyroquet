@@ -2,6 +2,8 @@
 
 Generate inputs with gzip_fixture_oracle.py; pass compiled roundtrip_mixed.mojo
 and current coverage/read_table.mojo executables. No oracle runs in the library.
+Release qualification uses release/gzip_writers.py for fail-closed central parity;
+the legacy standalone report below is diagnostic.
 """
 from __future__ import annotations
 import argparse
@@ -27,27 +29,34 @@ def inspect_wire(path, mixed):
     raw = path.read_bytes()
     footer = pq.ParquetFile(path).metadata
     evidence = inspect_metadata_evidence(path)
-    assert not evidence['findings'], evidence['findings']
+    if not (not evidence['findings']):
+        raise AssertionError(evidence['findings'])
     counts = Counter()
     for group_index, group in enumerate(evidence['row_groups']):
         for index, column in enumerate(group['columns']):
             codec = index % 3 if mixed else 2
             expected = ('UNCOMPRESSED', 'SNAPPY', 'GZIP')[codec]
-            assert footer.row_group(group_index).column(index).compression == expected
+            if not (footer.row_group(group_index).column(index).compression == expected):
+                raise AssertionError('GZIP wire invariant failed: footer.row_group(group_index).column(index).compression == expected')
             scan = column['page_scan']
-            assert scan['column_uncompressed_matches_pages']
-            assert scan['column_values_match_pages']
+            if not (scan['column_uncompressed_matches_pages']):
+                raise AssertionError("GZIP wire invariant failed: scan['column_uncompressed_matches_pages']")
+            if not (scan['column_values_match_pages']):
+                raise AssertionError("GZIP wire invariant failed: scan['column_values_match_pages']")
             for page in scan['page_records']:
-                assert page['type'] in (0, 3), page
+                if not (page['type'] in (0, 3)):
+                    raise AssertionError(page)
                 detail = page.get('data_page_header', page.get('data_page_header_v2'))
-                assert detail['encoding'] == 0
+                if not (detail['encoding'] == 0):
+                    raise AssertionError("GZIP wire invariant failed: detail['encoding'] == 0")
                 begin = page['offset'] + page['header_bytes']
                 stored = raw[begin:begin + page['compressed_page_size']]
                 decoded_size = page['uncompressed_page_size']
                 compressed = codec != 0
                 if page['type'] == 3:
                     prefix = detail['definition_levels_byte_length'] + detail['repetition_levels_byte_length']
-                    assert prefix <= len(stored) and prefix <= decoded_size
+                    if not (prefix <= len(stored) and prefix <= decoded_size):
+                        raise AssertionError('GZIP wire invariant failed: prefix <= len(stored) and prefix <= decoded_size')
                     stored = stored[prefix:]
                     decoded_size -= prefix
                     compressed = compressed and detail['is_compressed'] is not False
@@ -55,11 +64,14 @@ def inspect_wire(path, mixed):
                     decoder = zlib.decompressobj(wbits=31)
                     decoded = decoder.decompress(stored)
                     decoded += decoder.flush()
-                    assert decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail
-                    assert len(decoded) == decoded_size
+                    if not (decoder.eof and (not decoder.unused_data) and (not decoder.unconsumed_tail)):
+                        raise AssertionError('GZIP wire invariant failed: decoder.eof and (not decoder.unused_data) and (not decoder.unconsumed_tail)')
+                    if not (len(decoded) == decoded_size):
+                        raise AssertionError('GZIP wire invariant failed: len(decoded) == decoded_size')
                     counts['gzip_single_member_checked'] += 1
                 elif codec == 2:
-                    assert len(stored) == decoded_size
+                    if not (len(stored) == decoded_size):
+                        raise AssertionError('GZIP wire invariant failed: len(stored) == decoded_size')
                     counts['gzip_v2_raw_fallback'] += 1
     return dict(counts=counts, metadata=evidence)
 
