@@ -4,3 +4,12 @@ pandas==2.3.3
 duckdb==1.5.5
 pyarrow==25.0.1
 thrift==0.24.0
+# Direct array dependency and exact transitive versions for fixture reproducibility.
+numpy==2.5.3
+cramjam==2.12.1
+fsspec==2026.7.0
+packaging==26.3
+python-dateutil==2.9.0.post0
+pytz==2026.3.post1
+six==1.17.0
+tzdata==2026.4
