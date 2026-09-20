@@ -52,6 +52,17 @@ class ParityTests(unittest.TestCase):
         values=np.arange(65539,dtype='int32')
         self.check_table(pa.table({'x':values}))
 
+    def test_row_count_corruption(self):
+        path=self.directory/'zero-column.parquet'; out=self.directory/'export'
+        pq.write_table(pa.table({}),path)
+        export_native(path,BINARY,out,128*1024*1024)
+        descriptor=json.loads((out/'descriptor.json').read_text())
+        descriptor['rows']+=1
+        (out/'descriptor.json').write_text(json.dumps(descriptor))
+        report=compare_export(path,out)
+        self.assertEqual(report['status'],'failed')
+        self.assertTrue(any(x['engine']=='native_metadata' for x in report['unexpected']))
+
     def test_empty(self):
         self.check_table(pa.table({'x':pa.array([],type=pa.int64()),'s':pa.array([],type=pa.string())}))
 

@@ -235,6 +235,8 @@ def compare_export(path, export_dir):
     import duckdb, fastparquet
     export=Export(export_dir); result=dict(status='pass',engines={},unexpected=[])
     pf=pq.ParquetFile(path)
+    if pf.metadata.num_rows!=export.description['rows']:
+        result['unexpected'].append(dict(engine='native_metadata',error='exported row count differs from Parquet footer'))
     for engine in ('pyarrow','duckdb','fastparquet'):
         entry=dict(dimensions={},limitations=[]); result['engines'][engine]=entry
         offsets={}; connection=None
@@ -328,8 +330,12 @@ def compare_export(path, export_dir):
                                             offsets[child['id']]=int(export.records[node['id']][end-1]['bits']) if end else 0
                     field_walk(0,list(pf.schema_arrow))
                 batches=[]
+            observed_rows=0
             for batch in batches:
+                observed_rows+=batch.num_rows
                 for node,array in zip(export.children(0),batch.columns): export.compare(node,array,offsets,engine,entry['limitations'])
+            if engine!='fastparquet' and observed_rows!=export.description['rows']:
+                raise ValueError('oracle batch row count differs from exported row count')
             for node in export.nodes:
                 if engine=='fastparquet' and node['kind']==0: continue
                 if offsets.get(node['id'],0)!=node['count']: raise ValueError(f'incomplete node {node["name"]}')
