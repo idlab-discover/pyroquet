@@ -14,15 +14,16 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
-PROBE = """from mojo_snappy import decode_snappy
+PROBE = """from mojo_snappy import decompress
 def main() raises:
-    var decoded = decode_snappy([4, 12, 1, 2, 3, 4], 4)
+    var block: List[UInt8] = [4, 12, 1, 2, 3, 4]
+    var decoded = decompress(block, max_output_bytes=4)
     if len(decoded) != 4:
         raise Error("Resolution probe output length")
     print(Int(decoded[0]), Int(decoded[1]), Int(decoded[2]), Int(decoded[3]))
 """
-MARKER = """def decode_snappy(
-    data: List[UInt8], expected_size: Int, start: Int = 0
+MARKER = """def decompress(
+    src: Span[UInt8, _], *, max_output_bytes: Int
 ) raises -> List[UInt8]:
     return [UInt8(91), 92, 93, 94]
 """
@@ -34,8 +35,8 @@ def sha(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--revision", default="ad02f439892d7b7813677d94f8e0951be63d0041",
-                        help="Codec commit to verify (default: the 0.1.0 checkpoint)")
+    parser.add_argument("--revision", default="1bb71bec224d3d262d6a542dd872da7f2a665b9c",
+                        help="Codec commit to verify (default: the 0.2.0 API checkpoint)")
     parser.add_argument("--codec-repo", type=Path, default=ROOT.parent / "mojo-snappy")
     args = parser.parse_args()
     repo = args.codec_repo.resolve()

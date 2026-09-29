@@ -1,11 +1,16 @@
 """Internal bounded Parquet codec seam; page framing stays with the caller."""
 from mojo_snappy import (
-    decode_snappy,
-    encode_snappy,
-    snappy_max_compressed_length,
+    compress as snappy_compress,
+    decompress as snappy_decompress,
+    max_compressed_length as snappy_max_compressed_length,
 )
 from .gzip import decode_gzip, encode_gzip
 from .zstd import decode_zstd, encode_zstd
+
+
+def _check_start(data: List[UInt8], start: Int) raises:
+    if start < 0 or start > len(data):
+        raise Error("Invalid Snappy source start")
 
 
 def validate_codec(codec: Int) raises:
@@ -24,7 +29,11 @@ def decompress(
     is transient and separate from page/retained column output budgets.
     """
     if codec == 1:
-        return decode_snappy(data, expected, start)
+        _check_start(data, start)
+        var decoded = snappy_decompress(data[start:], max_output_bytes=expected)
+        if len(decoded) != expected:
+            raise Error("Snappy decoded length mismatch")
+        return decoded^
     if codec == 2:
         return decode_gzip(data, expected, start)
     if codec == 6:
@@ -44,7 +53,11 @@ def compress(
         var bound = limit
         if allow_expansion:
             bound = snappy_max_compressed_length(len(data) - start)
-        return encode_snappy(data, bound, start)
+        _check_start(data, start)
+        var encoded = snappy_compress(data[start:])
+        if len(encoded) > bound:
+            raise Error("Snappy encoded output exceeds limit")
+        return encoded^
     if codec == 2:
         return encode_gzip(data, limit, start, allow_expansion)
     if codec == 6:
