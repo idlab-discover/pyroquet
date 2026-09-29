@@ -1,6 +1,6 @@
 # Format support and API contracts
 
-This page describes the supported Parquet subset and storage behavior in Pyroquet 0.1.0.
+This page describes the supported Parquet subset and storage behavior in Pyroquet 0.1.1.
 
 ## Supported values and storage
 

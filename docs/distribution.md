@@ -1,6 +1,6 @@
 # Building and distribution
 
-Pyroquet 0.1.0 is distributed as source on
+Pyroquet 0.1.1 is distributed as source on
 [GitHub](https://github.com/idlab-discover/pyroquet). The release includes GitHub's
 source archives. No PyPI or Conda channel package is published by this project.
 
@@ -17,7 +17,7 @@ and have no tracked changes; mismatches are left unchanged.
 |---|---|
 | Mojo | 1.0.0 |
 | NuMojo | `515fb2856f0ecf3d2740a34d958fe168183e1129` |
-| mojo-snappy | `ad02f439892d7b7813677d94f8e0951be63d0041` |
+| mojo-snappy | `1bb71bec224d3d262d6a542dd872da7f2a665b9c` |
 | MAX core (required by NuMojo) | 26.5.0 |
 | zlib | 1.3.2 |
 | ZSTD | 1.5.7 |

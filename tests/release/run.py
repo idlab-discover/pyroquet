@@ -22,7 +22,7 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = ROOT / 'build/oracle-uv/bin/python'
 PINNED = {'NuMojo': '515fb2856f0ecf3d2740a34d958fe168183e1129',
-          'mojo-snappy': 'ad02f439892d7b7813677d94f8e0951be63d0041'}
+          'mojo-snappy': '1bb71bec224d3d262d6a542dd872da7f2a665b9c'}
 
 
 def digest(path):
@@ -36,7 +36,7 @@ def git(*args, cwd=ROOT):
 
 def identity():
     if platform.system() != 'Linux' or platform.machine() != 'x86_64':
-        raise RuntimeError('The 0.1.0 qualification target is Linux x86-64')
+        raise RuntimeError('The qualification target is Linux x86-64')
     sources = {}
     for name in git('ls-files').splitlines():
         path = ROOT / name

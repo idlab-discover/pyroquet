@@ -21,7 +21,7 @@ DEPENDENCIES = {
     'NuMojo': ('https://github.com/Mojo-Numerics-and-Algorithms-group/NuMojo.git',
                '515fb2856f0ecf3d2740a34d958fe168183e1129'),
     'mojo-snappy': ('https://github.com/idlab-discover/mojo-snappy.git',
-                    'ad02f439892d7b7813677d94f8e0951be63d0041'),
+                    '1bb71bec224d3d262d6a542dd872da7f2a665b9c'),
 }
 
 

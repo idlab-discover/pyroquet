@@ -7,7 +7,7 @@ Read, edit and write Parquet files in Mojo. Pyroquet loads numeric columns into
 can work on their values in place and save the result to a new file.
 
 The library runs in Mojo, with no Python runtime dependency. Snappy is native
-Mojo; GZIP and ZSTD use their C codec libraries. Version **0.1.0** targets
+Mojo; GZIP and ZSTD use their C codec libraries. Version **0.1.1** targets
 **Linux x86-64 and Mojo 1.0.0**.
 
 ## Get started
@@ -18,7 +18,7 @@ Install Git, Python 3, [Pixi](https://pixi.sh) **0.80.0** and
 ```sh
 git clone https://github.com/idlab-discover/pyroquet.git
 cd pyroquet
-git checkout v0.1.0
+git checkout v0.1.1
 python3 tools/bootstrap.py
 pixi run --locked package
 ```
@@ -64,7 +64,7 @@ file. For complete programs, see the [load and save examples](examples/) and the
 
 ## What can I read and write?
 
-| Feature | Support in 0.1.0 |
+| Feature | Support in 0.1.1 |
 |---|---|
 | Numbers | Signed and unsigned 8-, 16-, 32- and 64-bit integers; FLOAT16, FLOAT32 and FLOAT64 |
 | Other values | Booleans, UTF-8 strings, ENUM, raw bytes and fixed-width binary |
@@ -108,6 +108,7 @@ fully; those outcomes remain documented nonpasses. Read the
 
 - [Format and API contracts](docs/format-and-api.md): types, nesting, mutation, memory budgets and file writing.
 - [Building and distribution](docs/distribution.md): source dependencies, packages and CI.
+- [0.1.1 release notes](docs/release-0.1.1.md): mojo-snappy 0.2.0 update.
 - [0.1.0 release notes](docs/release-0.1.0.md): release scope and limitations.
 
 Pyroquet is licensed under [Apache-2.0](LICENSE). See the

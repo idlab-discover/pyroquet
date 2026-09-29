@@ -7,7 +7,7 @@ licenses for the pinned release dependencies and development corpus.
 | Component | Pinned source/version | License and retained notice |
 | --- | --- | --- |
 | [NuMojo](https://github.com/Mojo-Numerics-and-Algorithms-group/NuMojo) | `515fb2856f0ecf3d2740a34d958fe168183e1129` | [Apache-2.0 with the upstream LLVM exceptions](licenses/NUMOJO-LICENSE) |
-| [mojo-snappy](https://github.com/idlab-discover/mojo-snappy) | `ad02f439892d7b7813677d94f8e0951be63d0041` | [Apache-2.0](licenses/MOJO-SNAPPY-LICENSE); [Google Snappy BSD-3-Clause notice](licenses/MOJO-SNAPPY-THIRD-PARTY-NOTICES.md) for the upstream-adapted algorithms |
+| [mojo-snappy](https://github.com/idlab-discover/mojo-snappy) | `1bb71bec224d3d262d6a542dd872da7f2a665b9c` | [Apache-2.0](licenses/MOJO-SNAPPY-LICENSE); [Google Snappy BSD-3-Clause notice](licenses/MOJO-SNAPPY-THIRD-PARTY-NOTICES.md) for the upstream-adapted algorithms |
 | [zlib](https://zlib.net/) | `1.3.2` | [zlib license and copyright notice](licenses/ZLIB-LICENSE) |
 | [Zstandard](https://github.com/facebook/zstd) | `1.5.7` | [BSD-3-Clause license and copyright notice](licenses/ZSTD-LICENSE) |
 | MAX core | `26.5.0` | `LicenseRef-Modular-Proprietary`, as declared by the pinned Modular package; supplied separately with its upstream distribution terms |
