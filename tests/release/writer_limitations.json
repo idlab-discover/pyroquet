@@ -2,7 +2,7 @@
   "fixtures": [
     {
       "path": "nested-write-all-v1.parquet",
-      "sha256": "8d51a9ea599a53ca66572bcf88e83c2a823c8732ddb137609285026d57bb9896",
+      "sha256": "708f20a7a66ac97b5b590d872cbbdf1abd834cf8814687517a1dca1970c03fef",
       "oracle": "fastparquet",
       "version": "2026.5.0",
       "error": "n0: null mask at 0",
@@ -10,7 +10,7 @@
     },
     {
       "path": "nested-write-all-v2.parquet",
-      "sha256": "7b398888c43b260b40bc1ff02e24a9271d3771d6b1585ec96c37e3b61a380a66",
+      "sha256": "254cf7e0874954e288e495f97ac01ef464d74d435793fba306842178b62d904e",
       "oracle": "fastparquet",
       "version": "2026.5.0",
       "error": "an integer is required",
@@ -66,7 +66,7 @@
     },
     {
       "path": "nested-write-v1-c1.parquet",
-      "sha256": "48022f63a4810c085d02349ea1ac412689e671c84b2874a6ff6de1b6e7f6d777",
+      "sha256": "0c9372aa0a48783a92aeac47b9fd2d5508d588e88f8d6b47f296c45fae3e0442",
       "oracle": "fastparquet",
       "version": "2026.5.0",
       "error": "l: null mask at 0",
@@ -130,7 +130,7 @@
     },
     {
       "path": "string-nested-v1-c1.parquet",
-      "sha256": "703add5e2fe701b67d95d4feb349cc9748a6fd2461d7c582c0fc1610cc66f17b",
+      "sha256": "9920a435401064eb7a161280be1b01bb8e03c0081637b96aadb24b2396dd2b45",
       "oracle": "fastparquet",
       "version": "2026.5.0",
       "error": "labels: null mask at 0",
@@ -194,7 +194,7 @@
     },
     {
       "path": "enum-nested-v1-c1.parquet",
-      "sha256": "ca4d87fe8346da04d9996233ce19f777fcd70d0aa008d3a57391f8b29ea6ef6b",
+      "sha256": "a0cf80195ffc3ded1b3f4adb41ea24120ee37447e58cadbd70fa06bcc2c54058",
       "oracle": "fastparquet",
       "version": "2026.5.0",
       "error": "labels: null mask at 0",
