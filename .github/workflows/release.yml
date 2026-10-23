@@ -61,4 +61,5 @@ jobs:
             build/enum-nested*.parquet
             build/strings/native-*.parquet
             build/enums/native-*.parquet
+            build/release/**/gzip-writer-parity/**/*.parquet
           if-no-files-found: warn
