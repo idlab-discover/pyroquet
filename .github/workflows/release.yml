@@ -56,4 +56,9 @@ jobs:
             build/enums/*.json
             build/numeric-write-checks/*/results.json
             build/zstd/results.json
+            build/nested-write*.parquet
+            build/string-nested*.parquet
+            build/enum-nested*.parquet
+            build/strings/native-*.parquet
+            build/enums/native-*.parquet
           if-no-files-found: warn
