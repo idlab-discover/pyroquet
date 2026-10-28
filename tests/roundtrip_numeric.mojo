@@ -51,7 +51,7 @@ def main() raises:
             " row_group_rows max_page_bytes max_metadata_bytes max_row_groups"
             " page_version codec"
         )
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -62,7 +62,7 @@ def main() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for i in range(len(types)):
         comptime dtype = types[i]
         if args[1] == String(dtype):

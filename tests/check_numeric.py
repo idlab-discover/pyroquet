@@ -101,7 +101,7 @@ def check_wire():
 
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
-    subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', '-I', '../NuMojo',
+    subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src',
                     'tests/read_numeric.mojo', '-o', str(BINARY)], cwd=ROOT, check=True)
     files = rows = rejected = 0
     db = duckdb.connect()

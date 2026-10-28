@@ -105,7 +105,7 @@ def _numeric_paths[dtype: DType]() raises:
 
 
 def test_all_numeric_paths_and_output_guards() raises:
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -116,7 +116,7 @@ def test_all_numeric_paths_and_output_guards() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for i in range(len(types)):
         _numeric_paths[types[i]]()
 
@@ -288,7 +288,7 @@ def test_all_valid_metadata_does_not_bypass_level_validation() raises:
 
 
 def test_narrow_plain_still_rejects_out_of_range_all_present() raises:
-    comptime types = (DType.int8, DType.uint8, DType.int16, DType.uint16)
+    comptime types = [DType.int8, DType.uint8, DType.int16, DType.uint16]
     comptime for i in range(len(types)):
         comptime dtype = types[i]
         var values = empty[dtype]([1])

@@ -1,6 +1,6 @@
 """Load a flat UInt32 column from an uncompressed PLAIN Parquet file.
 
-Run: pixi run mojo run -I src -I ../NuMojo examples/load_numojo.mojo FILE COLUMN
+Run: pixi run mojo run -I src examples/load_numojo.mojo FILE COLUMN
 """
 from std.sys import argv
 from pyroquet.numojo_io import load_numeric

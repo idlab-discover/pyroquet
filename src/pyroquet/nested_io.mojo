@@ -88,7 +88,7 @@ def _leaf_overhead(kind: Int, count: Int, budget: Int) raises -> Int:
 
 
 def _kind(node: SchemaElement) -> Int:
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -100,7 +100,7 @@ def _kind(node: SchemaElement) -> Int:
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for i in range(len(types)):
         if _matches_numeric[types[i]](node):
             return SchemaNode.numeric_kind[types[i]]()
@@ -782,7 +782,7 @@ def load_nested_table(
         )
         counts.append(count)
     var columns = List[Column]()
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -794,7 +794,7 @@ def load_nested_table(
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     for i in range(len(plan.leaves)):
         var kind = plan.nodes[plan.leaf_nodes[i]].kind()
         if (

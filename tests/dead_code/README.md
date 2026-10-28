@@ -17,8 +17,8 @@ Run from repo root; choose fresh output paths:
 
 ```sh
 build/oracle-uv/bin/python tests/dead_code/instrument.py build/call-audit/source
-pixi run mojo build -O3 -g -D ASSERT=all -I build/call-audit/source/src -I ../NuMojo tests/large_files/load.mojo -Xlinker build/call-audit/source/counter.o -o build/call-audit/load
-pixi run mojo build -O3 -g -D ASSERT=all -I build/call-audit/source/src -I ../NuMojo tests/dead_code/roundtrip.mojo -Xlinker build/call-audit/source/counter.o -o build/call-audit/roundtrip
+pixi run mojo build -O3 -g -D ASSERT=all -I build/call-audit/source/src tests/large_files/load.mojo -Xlinker build/call-audit/source/counter.o -o build/call-audit/load
+pixi run mojo build -O3 -g -D ASSERT=all -I build/call-audit/source/src tests/dead_code/roundtrip.mojo -Xlinker build/call-audit/source/counter.o -o build/call-audit/roundtrip
 build/oracle-uv/bin/python tests/dead_code/collect.py --instrumented build/call-audit/source --reader build/call-audit/load --writer build/call-audit/roundtrip --out build/call-audit/evidence
 ```
 

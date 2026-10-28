@@ -155,7 +155,7 @@ def _typed[dtype: DType]() raises:
 
 
 def test_nullable_numeric_types() raises:
-    comptime types = (DType.int8, DType.uint8, DType.int16, DType.uint16, DType.int32, DType.uint32, DType.int64, DType.uint64, DType.float32, DType.float64)
+    comptime types = [DType.int8, DType.uint8, DType.int16, DType.uint16, DType.int32, DType.uint32, DType.int64, DType.uint64, DType.float32, DType.float64]
     comptime for i in range(len(types)):
         _typed[types[i]]()
 

@@ -19,7 +19,7 @@ def main() raises:
     var table = load_table(args[1])
     print(table.num_rows(), table.num_columns())
     var schema = table.schema()
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -31,7 +31,7 @@ def main() raises:
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     for c in range(table.num_columns()):
         var node = schema.node(c + 1)
         var name = table.column(c).name()

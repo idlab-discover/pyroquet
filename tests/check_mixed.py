@@ -272,7 +272,7 @@ def projection_structure_checks():
 def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for source, target in [('read_mixed', READ), ('roundtrip_mixed', WRITE)]:
-        subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', '-I', '../NuMojo', f'tests/{source}.mojo', '-o', str(target)], cwd=ROOT, check=True)
+        subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', f'tests/{source}.mojo', '-o', str(target)], cwd=ROOT, check=True)
     db = duckdb.connect()
     projection_structure_checks()
     zero_column_file_checks(db)

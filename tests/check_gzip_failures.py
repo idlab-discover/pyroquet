@@ -26,7 +26,7 @@ def main() -> None:
                     "-o", str(fake / "libz.so.1")], check=True)
     binary = BUILD / "driver"
     subprocess.run(["pixi", "run", "mojo", "build", "-O3", "-D", "ASSERT=all",
-                    "-I", "src", "-I", "../NuMojo", "tests/gzip_failure_driver.mojo",
+                    "-I", "src", "tests/gzip_failure_driver.mojo",
                     "-o", str(binary)], cwd=ROOT, check=True)
     results = []
     operations = ["read"] if args.read_only else ["read", "write"]

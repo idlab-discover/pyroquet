@@ -63,7 +63,7 @@ def all_leaves() raises -> NestedTable:
     ]
     var leaves = List[Column]()
     var structures: List[NestedStructure] = [NestedStructure(4)]
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -74,7 +74,7 @@ def all_leaves() raises -> NestedTable:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for t in range(10):
         comptime dtype = types[t]
         var list_index = len(nodes)

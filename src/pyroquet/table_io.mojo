@@ -64,7 +64,7 @@ def load_table(
         if selected == -1:
             raise Error("Top-level column not found: " + name)
         indices.append(selected)
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -76,7 +76,7 @@ def load_table(
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     var budget = max_output_bytes
     # Preflight fixed output storage; charge variable arenas as they materialize.
     for index in indices:

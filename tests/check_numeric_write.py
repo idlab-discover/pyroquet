@@ -412,7 +412,7 @@ def main():
     base = OUT
     base.mkdir(parents=True, exist_ok=True)
     subprocess.run(['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
-                    '-I', 'src', '-I', '../NuMojo', 'tests/roundtrip_numeric.mojo',
+                    '-I', 'src', 'tests/roundtrip_numeric.mojo',
                     '-o', str(BINARY)], cwd=ROOT, check=True)
     for codec in (0, 1):
         CODEC = codec

@@ -21,8 +21,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = ROOT / 'build/oracle-uv/bin/python'
-PINNED = {'NuMojo': '515fb2856f0ecf3d2740a34d958fe168183e1129',
-          'mojo-snappy': '1bb71bec224d3d262d6a542dd872da7f2a665b9c'}
+PINNED = {'numojo': ('0.11.0', 'hb0f4dca_0'), 'mojo-snappy': ('0.2.0', 'hb0f4dca_1')}
 
 
 def digest(path):
@@ -42,16 +41,14 @@ def identity():
         path = ROOT / name
         if path.is_file():
             sources[name] = digest(path)
+    prefix = ROOT / '.pixi/envs/default'
     deps = {}
-    for name, revision in PINNED.items():
-        path = ROOT.parent / name
-        actual = git('rev-parse', 'HEAD', cwd=path)
-        dirty = git('status', '--porcelain', cwd=path)
-        if actual != revision or dirty:
-            raise RuntimeError(f'{name}: expected clean revision {revision}; got {actual}, {dirty!r}')
-        deps[name] = {'revision': actual, 'files': {
-            n: digest(path / n) for n in git('ls-files', cwd=path).splitlines()
-            if (path / n).is_file()}}
+    for name, (version, build) in PINNED.items():
+        record = prefix / 'conda-meta' / f'{name}-{version}-{build}.json'
+        if not record.is_file():
+            raise RuntimeError(f'{name}: expected installed package {version} {build}')
+        meta = json.loads(record.read_text())
+        deps[name] = {key: meta[key] for key in ('version', 'build', 'url', 'sha256')}
     versions = {}
     for line in (ROOT / 'tests/oracle-requirements.txt').read_text().splitlines():
         line = line.strip()
@@ -62,9 +59,8 @@ def identity():
         if actual != expected:
             raise RuntimeError(f'Oracle version mismatch: {name} {actual} != {expected}')
         versions[name] = actual
-    prefix = ROOT / '.pixi/envs/default'
     runtime = {name: digest(prefix / name) for name in (
-        'bin/mojo', 'lib/mojo/std.mojoc', 'lib/mojo/mojo_snappy.mojoc',
+        'bin/mojo', 'lib/mojo/std.mojoc', 'lib/mojo/mojo_snappy.mojoc', 'lib/mojo/numojo.mojoc',
         'lib/libKGENCompilerRTShared.so', 'lib/libz.so.1', 'lib/libzstd.so.1',
         'lib/libMSupportGlobals.so', 'lib/libAsyncRTRuntimeGlobals.so',
         'lib/libAsyncRTMojoBindings.so',
@@ -162,7 +158,7 @@ class Gate:
         target = self.out / 'bin' / name
         target.parent.mkdir(exist_ok=True)
         self.run('build-' + name, ['pixi', 'run', 'mojo', 'build', '-O3', '-D',
-                                  'ASSERT=' + assertion, '-I', 'src', '-I', '../NuMojo', source, '-o', target])
+                                  'ASSERT=' + assertion, '-I', 'src', source, '-o', target])
         self.report.setdefault('binaries', {})[str(target)] = digest(target)
         self.save()
         return target
@@ -227,7 +223,7 @@ def native_checks(gate):
         gate.report.setdefault('packages', {})[artifact] = digest(ROOT / artifact)
     smoke = gate.out / 'bin/package-smoke'
     gate.run('build-package-consumer', ['pixi', 'run', 'mojo', 'build', '-O3', '-D', 'ASSERT=all',
-                                      '-I', 'build', '-I', '../NuMojo', 'tests/release/package_smoke.mojo', '-o', smoke])
+                                      '-I', 'build', 'tests/release/package_smoke.mojo', '-o', smoke])
     gate.report['binaries'][str(smoke)] = digest(smoke)
     gate.run('package-consumer', [smoke])
     gate.build('examples/mutate_numeric.mojo', 'mutation-example')

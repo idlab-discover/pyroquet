@@ -1,6 +1,6 @@
 """Save a loaded numeric column to a new uncompressed Parquet file.
 
-Run: pixi run mojo run -I src -I ../NuMojo examples/roundtrip_numeric.mojo INPUT OUTPUT COLUMN
+Run: pixi run mojo run -I src examples/roundtrip_numeric.mojo INPUT OUTPUT COLUMN
 """
 from std.sys import argv
 from pyroquet.numojo_io import load_numeric

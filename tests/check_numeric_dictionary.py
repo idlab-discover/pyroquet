@@ -244,7 +244,7 @@ def arrow_array(values,dtype):
 
 def main():
     OUT.mkdir(parents=True,exist_ok=True)
-    subprocess.run(['pixi','run','mojo','build','-O3','-I','src','-I','../NuMojo','tests/read_numeric.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
+    subprocess.run(['pixi','run','mojo','build','-O3','-I','src','tests/read_numeric.mojo','-o',str(BINARY)],cwd=ROOT,check=True)
     for dtype in TYPES:
         values=specials(dtype)
         for version in (1,2):
@@ -379,7 +379,7 @@ def truncated_snappy():
 
 def roundtrips():
     binary=OUT/'roundtrip'
-    subprocess.run(['pixi','run','mojo','build','-O3','-I','src','-I','../NuMojo','tests/roundtrip_numeric.mojo','-o',str(binary)],cwd=ROOT,check=True)
+    subprocess.run(['pixi','run','mojo','build','-O3','-I','src','tests/roundtrip_numeric.mojo','-o',str(binary)],cwd=ROOT,check=True)
     for dtype in TYPES:
         source=OUT/f'wire-{dtype}-v2-c1-n1.parquet'
         expected=next(r['expected_bits_or_integers'] for r in RESULTS if r['file']==source.name)

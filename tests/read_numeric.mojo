@@ -27,7 +27,7 @@ def main() raises:
     var budget = 1073741824
     if len(args) > 4:
         budget = Int(args[4])
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -39,7 +39,7 @@ def main() raises:
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for i in range(len(types)):
         comptime dtype = types[i]
         if args[1] == String(dtype):

@@ -54,7 +54,7 @@ def main():
         name = dtype + '-' + name
         source = source.replace('Pointer[UInt32,', f'Pointer[Scalar[DType.{dtype}],')
         path=out/(name+'.mojo');path.write_text(prelude+'\n'+source)
-        r=subprocess.run(['pixi','run','mojo','build','-I','src','-I','../NuMojo',str(path),'-o',str(out/name)],cwd=ROOT,text=True,capture_output=True)
+        r=subprocess.run(['pixi','run','mojo','build','-I','src',str(path),'-o',str(out/name)],cwd=ROOT,text=True,capture_output=True)
         (out/(name+'.log')).write_text(r.stdout+r.stderr)
         assert (r.returncode==0)==valid,(name,r.stdout,r.stderr)
         if not valid:assert 'error:' in r.stderr
@@ -62,7 +62,7 @@ def main():
     for dtype in ('bool',):
         path = out / (dtype + '-unsupported.mojo')
         path.write_text('from pyroquet.numojo_io import load_numeric\ndef main() raises:\n    _ = load_numeric[DType.' + dtype + '] ("unused", "x")\n')
-        r = subprocess.run(['pixi', 'run', 'mojo', 'build', '-I', 'src', '-I', '../NuMojo', str(path), '-o', str(out / dtype)], cwd=ROOT, text=True, capture_output=True)
+        r = subprocess.run(['pixi', 'run', 'mojo', 'build', '-I', 'src', str(path), '-o', str(out / dtype)], cwd=ROOT, text=True, capture_output=True)
         (out / (dtype + '-unsupported.log')).write_text(r.stdout + r.stderr)
         assert r.returncode != 0 and 'Unsupported numeric dtype' in r.stderr, r.stderr
         print('PASS', dtype, 'unsupported', flush=True)

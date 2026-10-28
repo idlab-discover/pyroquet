@@ -135,7 +135,7 @@ def _typed_dictionary_cases[dtype: DType]() raises:
 
 
 def test_dictionary_runs_batches_and_sparse_all_numeric_types() raises:
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -146,7 +146,7 @@ def test_dictionary_runs_batches_and_sparse_all_numeric_types() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for index in range(len(types)):
         _typed_dictionary_cases[types[index]]()
 
@@ -360,7 +360,7 @@ def _entry_cases[dtype: DType]() raises:
 
 
 def test_plain_dictionary_entries_all_dtypes_cardinalities_and_bits() raises:
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -371,7 +371,7 @@ def test_plain_dictionary_entries_all_dtypes_cardinalities_and_bits() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for i in range(len(types)):
         _entry_cases[types[i]]()
 
@@ -408,7 +408,7 @@ def test_plain_entry_lengths_reject_before_writing() raises:
 
 
 def test_plain_dictionary_rejects_narrow_entries_before_publication() raises:
-    comptime types = (DType.int8, DType.uint8, DType.int16, DType.uint16)
+    comptime types = [DType.int8, DType.uint8, DType.int16, DType.uint16]
     comptime for i in range(len(types)):
         comptime dtype = types[i]
         for side in range(2):

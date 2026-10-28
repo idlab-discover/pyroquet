@@ -86,7 +86,7 @@ def _column_valid(column: Column, row: Int) raises -> Bool:
         or column.kind() == SchemaNode.FIXED_BINARY
     ):
         return column.binary().is_valid(row)
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -98,7 +98,7 @@ def _column_valid(column: Column, row: Int) raises -> Bool:
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for t in range(len(types)):
         comptime dtype = types[t]
         if column.kind() == SchemaNode.numeric_kind[dtype]():

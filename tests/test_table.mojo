@@ -93,7 +93,7 @@ def test_invalid_schema() raises:
 
 
 def test_mixed_numeric_borrows() raises:
-    comptime dtypes = (
+    comptime dtypes = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -104,7 +104,7 @@ def test_mixed_numeric_borrows() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     var nodes: List[SchemaNode] = [SchemaNode("root", SchemaNode.GROUP, -1)]
     var columns = List[Column]()
     var value_addresses = List[Int]()

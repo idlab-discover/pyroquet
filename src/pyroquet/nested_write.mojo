@@ -74,7 +74,7 @@ def _nested_field(
     var physical = 0
     var width = 0
     var signed = False
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -86,7 +86,7 @@ def _nested_field(
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for t in range(len(types)):
         comptime dtype = types[t]
         if node.kind() == SchemaNode.numeric_kind[dtype]():
@@ -128,7 +128,7 @@ def _nested_valid(column: Column, index: Int) raises -> Bool:
         return Bool(column.boolean().value(index))
     if SchemaNode.BINARY <= column.kind() <= SchemaNode.ENUM:
         return column.binary().is_valid(index)
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -140,7 +140,7 @@ def _nested_valid(column: Column, index: Int) raises -> Bool:
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for t in range(len(types)):
         comptime dtype = types[t]
         if column.kind() == SchemaNode.numeric_kind[dtype]():
@@ -174,7 +174,7 @@ def _nested_value(
         for byte in value:
             bytes.append(byte)
     else:
-        comptime types = (
+        comptime types = [
             DType.int8,
             DType.uint8,
             DType.int16,
@@ -186,7 +186,7 @@ def _nested_value(
             DType.float16,
             DType.float32,
             DType.float64,
-        )
+        ]
         comptime for t in range(len(types)):
             comptime dtype = types[t]
             if column.kind() == SchemaNode.numeric_kind[dtype]():

@@ -45,7 +45,7 @@ def main() raises:
             continue
         var schema = table.schema()
         print("TABLE", table.num_rows(), len(schema) - 1)
-        comptime types = (
+        comptime types = [
             DType.int8,
             DType.uint8,
             DType.int16,
@@ -57,7 +57,7 @@ def main() raises:
             DType.float16,
             DType.float32,
             DType.float64,
-        )
+        ]
         for n in range(1, len(schema)):
             var node = schema.node(n)
             var name = node.name()

@@ -285,7 +285,7 @@ def _numeric_case[dtype: DType]() raises:
 
 
 def test_all_numeric_allocations_and_pages() raises:
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -296,7 +296,7 @@ def test_all_numeric_allocations_and_pages() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for index in range(len(types)):
         comptime dtype = types[index]
         _numeric_case[dtype]()
@@ -307,7 +307,7 @@ def test_checked_narrowing_and_signed_wire() raises:
     assert_equal(_plain_value[DType.int8](minus_one, 0), Int8(-1))
     assert_equal(_plain_value[DType.int16](minus_one, 0), Int16(-1))
     assert_equal(_plain_value[DType.int32](minus_one, 0), Int32(-1))
-    comptime types = (DType.uint8, DType.uint16)
+    comptime types = [DType.uint8, DType.uint16]
     comptime for index in range(len(types)):
         comptime dtype = types[index]
         with assert_raises():

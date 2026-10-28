@@ -1,6 +1,6 @@
 """Load FLOAT64, apply NuMojo fill, and save to a new ZSTD Parquet file.
 
-Run: pixi run mojo run -I src -I ../NuMojo examples/mutate_numeric.mojo INPUT OUTPUT COLUMN
+Run: pixi run mojo run -I src examples/mutate_numeric.mojo INPUT OUTPUT COLUMN
 """
 from std.sys import argv
 from pyroquet.numojo_io import load_numeric

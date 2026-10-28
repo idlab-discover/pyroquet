@@ -20,7 +20,7 @@ def _hash(path):
 
 def _sources(root):
     paths = []
-    for base in (root / 'src', root / '../NuMojo', root / '../mojo-snappy'):
+    for base in (root / 'src',):
         paths.extend(path for path in base.rglob('*.mojo')
                      if not any(part in {'.pixi', 'build', '.git'} for part in path.parts))
     paths.extend(root / relative for relative in (
@@ -52,8 +52,7 @@ def build_reader(repo_root=ROOT, binary=None, source="tests/coverage/read_table.
     root = Path(repo_root).resolve()
     binary = Path(binary or root / 'build/coverage-ledger/read-table').resolve()
     binary.parent.mkdir(parents=True, exist_ok=True)
-    command = ['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', '-I',
-               '../NuMojo', source, '-o', str(binary)]
+    command = ['pixi', 'run', 'mojo', 'build', '-O3', '-I', 'src', source, '-o', str(binary)]
     before = _sources(root)
     compiler = root / '.pixi/envs/default/bin/mojo'
     version_command = ['pixi', 'run', 'mojo', '--version']

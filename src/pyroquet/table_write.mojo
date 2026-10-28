@@ -79,7 +79,7 @@ def save_table(
     var schema = table.schema()
     var fields = List[_WrittenField](capacity=columns)
     var configured = List[NumericWriteOptions](capacity=columns)
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -91,7 +91,7 @@ def save_table(
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     for c in range(columns):
         var setting = ColumnWriteOptions()
         if len(column_options) != 0:

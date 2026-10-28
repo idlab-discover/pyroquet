@@ -161,7 +161,7 @@ def _typed_cases[dtype: DType]() raises:
 
 
 def test_packed_bounds_and_failures_all_numeric_types() raises:
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -172,7 +172,7 @@ def test_packed_bounds_and_failures_all_numeric_types() raises:
         DType.uint64,
         DType.float32,
         DType.float64,
-    )
+    ]
     comptime for i in range(len(types)):
         _typed_cases[types[i]]()
 

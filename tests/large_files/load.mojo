@@ -18,7 +18,7 @@ def main() raises:
         print("WARMUP" if iteration == 0 else "TIME", elapsed, table.num_rows(), table.num_columns())
         if args[4] != "-":
             var schema = table.schema()
-            comptime types = (DType.int8, DType.uint8, DType.int16, DType.uint16, DType.int32, DType.uint32, DType.int64, DType.uint64, DType.float32, DType.float64)
+            comptime types = [DType.int8, DType.uint8, DType.int16, DType.uint16, DType.int32, DType.uint32, DType.int64, DType.uint64, DType.float32, DType.float64]
             for c in range(table.num_columns()):
                 print("NAME " + table.column(c).name())
                 print("COLUMN", c, table.column(c).dtype(), schema.node(c + 1).nullable(), table.column(c).null_count(), table.column(c).size())

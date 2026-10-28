@@ -29,7 +29,7 @@ def main() raises:
     var actual = load_table(args[3], names^, Int(args[2]))
     assert_equal(source.num_rows(), actual.num_rows())
     assert_equal(source.num_columns(), actual.num_columns())
-    comptime types = (
+    comptime types = [
         DType.int8,
         DType.uint8,
         DType.int16,
@@ -41,7 +41,7 @@ def main() raises:
         DType.float16,
         DType.float32,
         DType.float64,
-    )
+    ]
     for c in range(source.num_columns()):
         assert_equal(source.column(c).name(), actual.column(c).name())
         assert_equal(source.column(c).dtype(), actual.column(c).dtype())

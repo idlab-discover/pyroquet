@@ -103,7 +103,7 @@ def main():
         path = out / (name + ".mojo")
         path.write_text(PRELUDE + "\n" + source)
         result = subprocess.run(
-            ["pixi", "run", "mojo", "build", "-I", "src", "-I", "../NuMojo",
+            ["pixi", "run", "mojo", "build", "-I", "src",
              str(path), "-o", str(out / name)],
             cwd=ROOT, text=True, capture_output=True,
         )
