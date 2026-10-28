@@ -6,11 +6,11 @@ source archives. No PyPI or Conda channel package is published by this project.
 
 ## Conda package candidate
 
-The recipe in `conda.recipe/recipe.yaml` packages the pinned 0.1.1 source commit
+The recipe in `conda.recipe/recipe.yaml` packages the current checkout
 for Linux x86-64. Build and test it with:
 
 ```sh
-pixi run conda-build
+pixi run --locked -e packaging conda-build
 ```
 
 This invokes Rattler-Build 0.76.1, installs `pyroquet.mojoc` and
@@ -19,9 +19,9 @@ both assertion modes. Tests cover numeric writes, Snappy pages, GZIP, ZSTD,
 FLOAT16 mutation and ENUM access without source or sibling include paths.
 Artifacts are written to `build/conda/linux-64/`.
 
-NuMojo 0.10.0 and mojo-snappy 0.2.0 are separate dependencies supplied by
-`https://repo.prefix.dev/modular-community`. The recipe also pins Mojo 1.0.0,
-MAX core 26.5.0, zlib 1.3.2 and ZSTD 1.5.7. It does not bundle dependency modules.
+NuMojo 0.11.0 and mojo-snappy 0.2.0 are separate dependencies supplied by
+`https://repo.prefix.dev/modular-community`. The recipe also pins Mojo 1.1.0,
+MAX core 26.6.0, zlib 1.3.2 and ZSTD 1.5.7. It does not bundle dependency modules.
 Python oracle tools remain separate from library execution.
 
 To test the local artifact, add the absolute `file:///.../build/conda` channel
@@ -94,8 +94,10 @@ perform the mandatory large-file gate using the same frozen exporter. On other
 branches, manual dispatch can enable large qualification.
 
 The workflow uploads qualification reports and stdout/stderr logs, including
-independent writer results. It does not publish a package to a channel or create
-a GitHub release. See the [qualification workflow](../tests/release/README.md)
+independent writer results. A separate package job tests an isolated Conda installation and uploads its
+artifact, SHA256SUMS and SOURCE_COMMIT. Annotated version tags on main call
+the same CI workflow, verify versions and checksums, and create a draft GitHub
+release with these artifacts. Channel publication remains separate. See the [qualification workflow](../tests/release/README.md)
 for the checks and evidence contracts.
 
 For a release, commit the final source, documentation and assets together as a

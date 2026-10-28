@@ -8,7 +8,7 @@ can work on their values in place and save the result to a new file.
 
 The library runs in Mojo, with no Python runtime dependency. Snappy is native
 Mojo; GZIP and ZSTD use their C codec libraries. Version **0.1.1** targets
-**Linux x86-64 and Mojo 1.0.0**.
+**Linux x86-64 and Mojo 1.1.0**.
 
 ## Get started
 
@@ -23,13 +23,11 @@ python3 tools/bootstrap.py
 pixi run --locked package
 ```
 
-The bootstrap script installs the pinned toolchain and development readers. It
-also creates `NuMojo` and `mojo-snappy` checkouts beside the `pyroquet` directory.
-If those directories already exist at different revisions, it stops and leaves
-them unchanged. Use a fresh parent directory in that case.
+The bootstrap script installs the pinned toolchain, packaged Mojo dependencies,
+and development readers. Existing environments are checked against the pins.
 
-This is a source release. The build produces `build/pyroquet.mojoc`; it does not
-install a Python package. See [building and distribution](docs/distribution.md)
+The release workflow builds a Conda package and attaches it to a draft GitHub
+release after qualification. See [building and distribution](docs/distribution.md)
 for dependency pins and using the precompiled library.
 
 ## Load, edit and save a column

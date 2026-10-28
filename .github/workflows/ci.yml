@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      large:
+        description: Run mandatory candidate large-file qualification after ordinary checks
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && !startsWith(github.ref, 'refs/tags/') }}
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          pixi-version: v0.80.0
+          locked: true
+      - name: Install pinned development package manager
+        run: |
+          python3 -m venv "$RUNNER_TEMP/pyroquet-uv-tools"
+          "$RUNNER_TEMP/pyroquet-uv-tools/bin/python" -m pip install 'uv==0.12.10'
+      - name: Bootstrap compiler and independent readers
+        run: python3 tools/bootstrap.py --uv "$RUNNER_TEMP/pyroquet-uv-tools/bin/uv"
+      - name: Bootstrap safety controls
+        run: python3 -m unittest discover -s tests/bootstrap -p 'test_*.py'
+      - name: Ordinary release checks
+        run: pixi run --locked check-release
+      - name: Large candidate checks using the same frozen exporter
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.large)
+        run: pixi run --locked check-release-large
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: linux-x86-64-qualification-evidence
+          path: |
+            build/release/**/*.json
+            build/release/**/*.txt
+            build/release/**/*.stdout
+            build/release/**/*.stderr
+            build/strings/*.json
+            build/enums/*.json
+            build/numeric-write-checks/*/results.json
+            build/zstd/results.json
+            build/nested-write*.parquet
+            build/string-nested*.parquet
+            build/enum-nested*.parquet
+            build/strings/native-*.parquet
+            build/enums/native-*.parquet
+            build/release/**/gzip-writer-parity/**/*.parquet
+          if-no-files-found: warn
+
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: prefix-dev/setup-pixi@d3f436a425481402e6a95a1d1fc10331c708cd9e # v0.10.2
+        with:
+          pixi-version: v0.80.0
+          environments: packaging
+          locked: true
+      - name: Build Conda package and test an isolated installation
+        run: pixi run --locked -e packaging conda-build
+      - name: Record package checksums and source revision
+        shell: bash
+        run: |
+          cd build/conda/linux-64
+          sha256sum ./*.conda > SHA256SUMS
+          git rev-parse HEAD > SOURCE_COMMIT
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pyroquet-conda-linux-64
+          path: |
+            build/conda/linux-64/*.conda
+            build/conda/linux-64/SHA256SUMS
+            build/conda/linux-64/SOURCE_COMMIT
+          if-no-files-found: error

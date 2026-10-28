@@ -7,7 +7,6 @@ version = "0.1.1"
 preview = ["pixi-build"]
 
 [tasks]
-conda-build = "pixi exec --spec rattler-build==0.76.1 -- rattler-build build --recipe conda.recipe/recipe.yaml --output-dir build/conda -c https://conda.modular.com/max -c conda-forge -c https://repo.prefix.dev/modular-community"
 check-release = "build/oracle-uv/bin/python tests/release/run.py"
 check-release-large = "build/oracle-uv/bin/python tests/release/run.py --large"
 generate-float16-fixtures = "build/oracle-uv/bin/python tests/float16_fixture_oracle.py --generate"
@@ -59,11 +58,21 @@ format = "mojo format src tests examples"
 
 [dependencies]
 mojo = "==1.1.0"
-numojo = "==0.11.0"
-mojo-snappy = "==0.2.0"
+numojo = { version = "==0.11.0", build = "hb0f4dca_0" }
+mojo-snappy = { version = "==0.2.0", build = "hb0f4dca_1" }
 libzlib = "==1.3.2"
 zstd = "==1.5.7"
 max-core = "==26.6.0"
 
 [activation.env]
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"
+
+[feature.packaging.dependencies]
+rattler-build = "==0.76.1"
+
+[feature.packaging.tasks]
+conda-build = "rattler-build build --recipe conda.recipe/recipe.yaml --output-dir build/conda -c https://conda.modular.com/max -c conda-forge -c https://repo.prefix.dev/modular-community"
+
+[environments]
+packaging = { features = ["packaging"], solve-group = "default" }
+default = { features = [], solve-group = "default" }
