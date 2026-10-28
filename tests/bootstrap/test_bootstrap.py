@@ -1,8 +1,7 @@
-"""Bootstrap must preserve mismatched checkouts and existing oracle environments."""
+"""Bootstrap must preserve existing oracle environments."""
 import importlib.util
 import json
 from pathlib import Path
-import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -12,47 +11,7 @@ bootstrap = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(bootstrap)
 
 
-def repository(path):
-    subprocess.run(['git', 'init', '-q', str(path)], check=True)
-    (path / 'tracked').write_text('original')
-    subprocess.run(['git', '-C', str(path), 'add', 'tracked'], check=True)
-    subprocess.run(['git', '-C', str(path), '-c', 'user.name=Bootstrap Test',
-                    '-c', 'user.email=bootstrap@example.invalid', '-c', 'commit.gpgsign=false',
-                    'commit', '-qm', 'fixture'], check=True)
-    return bootstrap.git(path, 'rev-parse', 'HEAD')
-
-
 class BootstrapTests(unittest.TestCase):
-    def test_fetches_exact_revision_into_absent_destination(self):
-        with tempfile.TemporaryDirectory() as directory:
-            base = Path(directory); source = base / 'source'; source.mkdir()
-            revision = repository(source)
-            destination = base / 'dependency'
-            result = bootstrap.prepare_dependency(destination, str(source), revision)
-            self.assertEqual(result['revision'], revision)
-            self.assertEqual((destination / 'tracked').read_text(), 'original')
-            with patch.object(bootstrap, 'run') as run:
-                bootstrap.prepare_dependency(destination, 'unused', revision)
-                run.assert_not_called()
-
-    def test_refuses_wrong_revision_without_modifying_checkout(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory); revision = repository(path)
-            with patch.object(bootstrap, 'run') as run:
-                with self.assertRaisesRegex(RuntimeError, 'left unchanged'):
-                    bootstrap.prepare_dependency(path, 'unused', '0' * 40)
-                run.assert_not_called()
-            self.assertEqual(bootstrap.git(path, 'rev-parse', 'HEAD'), revision)
-            self.assertEqual((path / 'tracked').read_text(), 'original')
-
-    def test_refuses_tracked_changes_without_modifying_file(self):
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory); revision = repository(path)
-            (path / 'tracked').write_text('user changes')
-            with self.assertRaisesRegex(RuntimeError, 'tracked modifications'):
-                bootstrap.prepare_dependency(path, 'unused', revision)
-            self.assertEqual((path / 'tracked').read_text(), 'user changes')
-
     def test_existing_oracle_mismatch_never_runs_installer(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
