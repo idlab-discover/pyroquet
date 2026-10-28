@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
+REMOTE = "https://github.com/idlab-discover/mojo-snappy.git"
 PROBE = """from mojo_snappy import decompress
 def main() raises:
     var block: List[UInt8] = [4, 12, 1, 2, 3, 4]
@@ -35,11 +36,19 @@ def sha(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--revision", default="1bb71bec224d3d262d6a542dd872da7f2a665b9c",
-                        help="Codec commit to verify (default: the 0.2.0 API checkpoint)")
-    parser.add_argument("--codec-repo", type=Path, default=ROOT.parent / "mojo-snappy")
+    parser.add_argument("--revision", default="83a08c6f746077003a833a8cb014039dd836f6bb",
+                        help="Codec commit to verify (default: the 0.2.0 Mojo 1.1 build)")
+    parser.add_argument("--codec-repo", type=Path, default=ROOT.parent / "mojo-snappy",
+                        help="Local codec repository; fetched into build/ when absent")
     args = parser.parse_args()
     repo = args.codec_repo.resolve()
+    if not repo.exists():
+        repo = ROOT / "build/snappy-resolution/codec-repo"
+        if not repo.exists():
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            subprocess.run(["git", "-C", str(repo), "remote", "add", "origin", REMOTE], check=True)
+        subprocess.run(["git", "-C", str(repo), "fetch", "-q", "--depth", "1", "origin", args.revision],
+                       check=True)
     prefix = ROOT / ".pixi/envs/default"
     compiler = prefix / "bin/mojo"
     original_home = prefix / "share/max"
