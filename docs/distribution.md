@@ -47,17 +47,16 @@ build or submitted PR does not establish that the package is published.
 
 The supported target is Linux x86-64. Install Git, Python 3, Pixi 0.80.0 and
 uv 0.12.10, then run `python3 tools/bootstrap.py` from a clean checkout.
-Bootstrap fetches missing sibling dependencies over HTTPS, verifies their exact
-revisions, installs the locked Pixi environment and sets up pinned independent
-readers in `build/oracle-uv`. Existing dependency checkouts must match the pins
-and have no tracked changes; mismatches are left unchanged.
+Bootstrap installs the locked Pixi environment and sets up pinned independent
+readers in `build/oracle-uv`. NuMojo and mojo-snappy are precompiled packages
+from `https://repo.prefix.dev/modular-community`; no sibling checkouts are used.
 
-| Dependency | Pinned revision or version |
+| Dependency | Pinned version |
 |---|---|
-| Mojo | 1.0.0 |
-| NuMojo | `515fb2856f0ecf3d2740a34d958fe168183e1129` |
-| mojo-snappy | `1bb71bec224d3d262d6a542dd872da7f2a665b9c` |
-| MAX core (required by NuMojo) | 26.5.0 |
+| Mojo | 1.1.0 |
+| NuMojo | 0.11.0 (`hb0f4dca_0`) |
+| mojo-snappy | 0.2.0 (`hb0f4dca_1`) |
+| MAX core (required by NuMojo) | 26.6.0 |
 | zlib | 1.3.2 |
 | ZSTD | 1.5.7 |
 
@@ -74,13 +73,13 @@ pixi run --locked package-compact  # build/compact_protocol.mojoc
 From this checkout, compile an application from source:
 
 ```sh
-pixi run --locked mojo build -I src -I ../NuMojo app.mojo -o build/app
+pixi run --locked mojo build -I src app.mojo -o build/app
 pixi run --locked ./build/app
 ```
 
 To import the precompiled packages instead, build both packages above and use
-`-I build` in place of `-I src`. NuMojo's source include and the locked environment
-are still required. Use absolute include paths when building elsewhere.
+`-I build` in place of `-I src`. The locked environment, which supplies NuMojo and
+mojo-snappy, is still required. Use absolute include paths when building elsewhere.
 
 The `.mojoc` files are tied to the pinned Mojo toolchain. They are not standalone
 executables or self-contained installations. Run consumers through Pixi to use

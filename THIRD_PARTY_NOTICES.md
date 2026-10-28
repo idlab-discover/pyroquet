@@ -6,14 +6,14 @@ licenses for the pinned release dependencies and development corpus.
 
 | Component | Pinned source/version | License and retained notice |
 | --- | --- | --- |
-| [NuMojo](https://github.com/Mojo-Numerics-and-Algorithms-group/NuMojo) | `515fb2856f0ecf3d2740a34d958fe168183e1129` | [Apache-2.0 with the upstream LLVM exceptions](licenses/NUMOJO-LICENSE) |
-| [mojo-snappy](https://github.com/idlab-discover/mojo-snappy) | `1bb71bec224d3d262d6a542dd872da7f2a665b9c` | [Apache-2.0](licenses/MOJO-SNAPPY-LICENSE); [Google Snappy BSD-3-Clause notice](licenses/MOJO-SNAPPY-THIRD-PARTY-NOTICES.md) for the upstream-adapted algorithms |
+| [NuMojo](https://github.com/Mojo-Numerics-and-Algorithms-group/NuMojo) | `0.11.0` (`hb0f4dca_0`, modular-community) | [Apache-2.0 with the upstream LLVM exceptions](licenses/NUMOJO-LICENSE) |
+| [mojo-snappy](https://github.com/idlab-discover/mojo-snappy) | `0.2.0` (`hb0f4dca_1`, modular-community) | [Apache-2.0](licenses/MOJO-SNAPPY-LICENSE); [Google Snappy BSD-3-Clause notice](licenses/MOJO-SNAPPY-THIRD-PARTY-NOTICES.md) for the upstream-adapted algorithms |
 | [zlib](https://zlib.net/) | `1.3.2` | [zlib license and copyright notice](licenses/ZLIB-LICENSE) |
 | [Zstandard](https://github.com/facebook/zstd) | `1.5.7` | [BSD-3-Clause license and copyright notice](licenses/ZSTD-LICENSE) |
-| MAX core | `26.5.0` | `LicenseRef-Modular-Proprietary`, as declared by the pinned Modular package; supplied separately with its upstream distribution terms |
+| MAX core | `26.6.0` | `LicenseRef-Modular-Proprietary`, as declared by the pinned Modular package; supplied separately with its upstream distribution terms |
 | [Fastparquet golden corpus](https://github.com/dask/fastparquet) | `f4beb59382e584354c4b2ef2c7a42efa4e97f024` | [Upstream Apache-2.0 license](tests/release/notices/FASTPARQUET-LICENSE) and [corpus notice](tests/release/notices/FASTPARQUET-NOTICE.md) |
 
-NuMojo and mojo-snappy are Mojo source dependencies. GZIP and ZSTD use their
+NuMojo and mojo-snappy are precompiled Mojo package dependencies. GZIP and ZSTD use their
 external native codec libraries through FFI. The Fastparquet corpus and Python
 oracle packages are development/qualification inputs, not library execution
 dependencies. Their exact versions are recorded in `tests/oracle-requirements.txt`.
