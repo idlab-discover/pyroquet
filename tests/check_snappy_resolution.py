@@ -36,8 +36,8 @@ def sha(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--revision", default="83a08c6f746077003a833a8cb014039dd836f6bb",
-                        help="Codec commit to verify (default: the 0.2.0 Mojo 1.1 build)")
+    parser.add_argument("--revision", default="a7751a507f5e54e499ed33c40926ae3a3b586021",
+                        help="Codec commit to verify (default: the v0.2.1 Mojo 1.2 build)")
     parser.add_argument("--codec-repo", type=Path, default=ROOT.parent / "mojo-snappy",
                         help="Local codec repository; fetched into build/ when absent")
     args = parser.parse_args()

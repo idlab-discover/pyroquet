@@ -8,7 +8,7 @@ can work on their values in place and save the result to a new file.
 
 The library runs in Mojo, with no Python runtime dependency. Snappy is native
 Mojo; GZIP and ZSTD use their C codec libraries. Version **0.1.1** targets
-**Linux x86-64 and Mojo 1.1.0**.
+**Linux x86-64 and Mojo 1.2.0**.
 
 ## Get started
 

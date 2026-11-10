@@ -21,7 +21,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[2]
 PYTHON = ROOT / 'build/oracle-uv/bin/python'
-PINNED = {'numojo': ('0.11.0', 'hb0f4dca_0'), 'mojo-snappy': ('0.2.0', 'hb0f4dca_1')}
+PINNED = {'numojo': ('0.12.0', 'hb0f4dca_0'), 'mojo-snappy': ('0.2.1', 'hb0f4dca_0')}
 
 
 def digest(path):

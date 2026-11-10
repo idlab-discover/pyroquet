@@ -19,9 +19,9 @@ both assertion modes. Tests cover numeric writes, Snappy pages, GZIP, ZSTD,
 FLOAT16 mutation and ENUM access without source or sibling include paths.
 Artifacts are written to `build/conda/linux-64/`.
 
-NuMojo 0.11.0 and mojo-snappy 0.2.0 are separate dependencies supplied by
-`https://repo.prefix.dev/modular-community`. The recipe also pins Mojo 1.1.0,
-MAX core 26.6.0, zlib 1.3.2 and ZSTD 1.5.7. It does not bundle dependency modules.
+NuMojo 0.12.0 and mojo-snappy 0.2.1 are separate dependencies supplied by
+`https://repo.prefix.dev/modular-community`. The recipe also pins Mojo 1.2.0,
+MAX core 26.7.0, zlib 1.3.2 and ZSTD 1.5.7. It does not bundle dependency modules.
 Python oracle tools remain separate from library execution.
 
 To test the local artifact, add the absolute `file:///.../build/conda` channel
@@ -53,10 +53,10 @@ from `https://repo.prefix.dev/modular-community`; no sibling checkouts are used.
 
 | Dependency | Pinned version |
 |---|---|
-| Mojo | 1.1.0 |
-| NuMojo | 0.11.0 (`hb0f4dca_0`) |
-| mojo-snappy | 0.2.0 (`hb0f4dca_1`) |
-| MAX core (required by NuMojo) | 26.6.0 |
+| Mojo | 1.2.0 |
+| NuMojo | 0.12.0 (`hb0f4dca_0`) |
+| mojo-snappy | 0.2.1 (`hb0f4dca_0`) |
+| MAX core (required by NuMojo) | 26.7.0 |
 | zlib | 1.3.2 |
 | ZSTD | 1.5.7 |
 
