@@ -26,6 +26,7 @@ from .format.flat_pages import _page_body, _flat_page_values, _u32
 
 
 from .numeric_column import NumericColumn, _check_numeric
+from .format.codes import Encoding, PageType
 
 
 def _matches_numeric[dtype: DType](node: SchemaElement) -> Bool:
@@ -199,7 +200,7 @@ def _decode_numeric_page_impl[
     dictionary: List[Scalar[dtype]],
     has_dictionary: Bool,
 ) raises -> Int:
-    if h.encoding != 0 and not indexed:
+    if h.encoding != Encoding.PLAIN and not indexed:
         raise Error("Unsupported numeric data encoding")
     if indexed and not has_dictionary:
         raise Error("Dictionary data page has no dictionary")
@@ -340,32 +341,34 @@ def _decode_numeric_page[
     dictionary: List[Scalar[dtype]],
     has_dictionary: Bool,
 ) raises -> Int:
-    if h.encoding == 5:
-        return _decode_delta_page[dtype](
-            bytes, h, nullable, values, bitmap, output
-        )
     # Select once per page; PLAIN keeps its original encoding-free inner loop.
-    if h.encoding == 2 or h.encoding == 8:
-        return _decode_numeric_page_impl[dtype, True](
-            bytes,
-            h,
-            nullable,
-            Span(unsafe_ptr=values.unsafe_ptr(), length=values.size),
-            bitmap,
-            output,
-            dictionary,
-            has_dictionary,
-        )
-    return _decode_numeric_page_impl[dtype, False](
-        bytes,
-        h,
-        nullable,
-        Span(unsafe_ptr=values.unsafe_ptr(), length=values.size),
-        bitmap,
-        output,
-        dictionary,
-        has_dictionary,
-    )
+    match h.encoding:
+        case Encoding.DELTA_BINARY_PACKED:
+            return _decode_delta_page[dtype](
+                bytes, h, nullable, values, bitmap, output
+            )
+        case Encoding.PLAIN_DICTIONARY | Encoding.RLE_DICTIONARY:
+            return _decode_numeric_page_impl[dtype, True](
+                bytes,
+                h,
+                nullable,
+                Span(unsafe_ptr=values.unsafe_ptr(), length=values.size),
+                bitmap,
+                output,
+                dictionary,
+                has_dictionary,
+            )
+        case _:
+            return _decode_numeric_page_impl[dtype, False](
+                bytes,
+                h,
+                nullable,
+                Span(unsafe_ptr=values.unsafe_ptr(), length=values.size),
+                bitmap,
+                output,
+                dictionary,
+                has_dictionary,
+            )
 
 
 def _plain_dictionary[
@@ -391,7 +394,7 @@ def _check_dictionary_header[dtype: DType](h: PageHeader, limit: Int) raises:
     comptime width = 2 if dtype == DType.float16 else (
         8 if size_of[Scalar[dtype]]() == 8 else 4
     )
-    if h.encoding != 0 and h.encoding != 2:
+    if h.encoding != Encoding.PLAIN and h.encoding != Encoding.PLAIN_DICTIONARY:
         raise Error("Dictionary entries require PLAIN encoding")
     if h.num_values < 0 or h.num_values > limit // width:
         raise Error("Dictionary cardinality exceeds page budget")
@@ -492,19 +495,22 @@ def _load_numeric_from_file[
             if not next:
                 break
             var page = next.value()
-            if page.header.page_type == 2:
-                _check_dictionary_header[dtype](
-                    page.header, page_limits.max_page_bytes
-                )
-            elif page.header.page_type != 0 and page.header.page_type != 3:
-                raise Error("Unsupported numeric page type")
+            match page.header.page_type:
+                case PageType.DICTIONARY_PAGE:
+                    _check_dictionary_header[dtype](
+                        page.header, page_limits.max_page_bytes
+                    )
+                case PageType.DATA_PAGE | PageType.DATA_PAGE_V2:
+                    pass
+                case _:
+                    raise Error("Unsupported numeric page type")
             var bytes = file.read_bytes(page.header.compressed_page_size)
             if len(bytes) != page.header.compressed_page_size:
                 raise Error("Short data-page payload read")
             bytes = _page_body(
                 bytes^, page.header, group.columns[column_index].codec
             )
-            if page.header.page_type == 2:
+            if page.header.page_type == PageType.DICTIONARY_PAGE:
                 dictionary = _plain_dictionary[dtype](
                     bytes, page.header.num_values
                 )

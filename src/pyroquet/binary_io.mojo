@@ -13,6 +13,7 @@ from .enum_column import EnumBuilder, _enum_overhead
 from .boolean_column import BooleanColumn
 from .table import Column
 from .schema import SchemaNode
+from .format.codes import Encoding, PageType
 
 
 def _binary_kind(node: SchemaElement) -> Int:
@@ -79,9 +80,10 @@ def _load_binary_from_file(
             var h = page.header
             var data = file.read_bytes(h.compressed_page_size)
             data = _page_body(data^, h, group.columns[column_index].codec)
-            if h.page_type == 2:
+            if h.page_type == PageType.DICTIONARY_PAGE:
                 if kind == SchemaNode.BOOLEAN or (
-                    h.encoding != 0 and h.encoding != 2
+                    h.encoding != Encoding.PLAIN
+                    and h.encoding != Encoding.PLAIN_DICTIONARY
                 ):
                     raise Error("Unsupported dictionary encoding/type")
                 # Include offsets as well as bytes in the dictionary arena budget.
@@ -127,21 +129,27 @@ def _load_binary_from_file(
                             bits[row // 8] |= UInt8(1) << UInt8(row % 8)
                         used += 1
             else:
-                var indexed = h.encoding == 2 or h.encoding == 8
+                var indexed = (
+                    h.encoding == Encoding.PLAIN_DICTIONARY
+                    or h.encoding == Encoding.RLE_DICTIONARY
+                )
                 var decoded = BinaryColumn([0], [])
                 var ids = _HybridDecoder(0, 0, 0, 0)
-                if indexed:
-                    if not has_dictionary or len(payload) == 0:
-                        raise Error("Missing binary dictionary or ID bit width")
-                    ids = _HybridDecoder(
-                        1, len(payload), Int(payload[0]), present
-                    )
-                elif h.encoding == 0:
-                    decoded = decode_plain_binary(
-                        payload, present, width, page_limits.max_page_bytes
-                    )
-                else:
-                    raise Error("Unsupported binary value encoding")
+                match h.encoding:
+                    case Encoding.PLAIN_DICTIONARY | Encoding.RLE_DICTIONARY:
+                        if not has_dictionary or len(payload) == 0:
+                            raise Error(
+                                "Missing binary dictionary or ID bit width"
+                            )
+                        ids = _HybridDecoder(
+                            1, len(payload), Int(payload[0]), present
+                        )
+                    case Encoding.PLAIN:
+                        decoded = decode_plain_binary(
+                            payload, present, width, page_limits.max_page_bytes
+                        )
+                    case _:
+                        raise Error("Unsupported binary value encoding")
                 var used = 0
                 for i in range(h.num_values):
                     var row = output + i

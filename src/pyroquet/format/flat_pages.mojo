@@ -6,6 +6,7 @@ Typed materializers own values and dictionaries; no storage dependency here.
 from .pages import PageHeader
 from std.bit import pop_count
 from ..compression import decompress, validate_codec
+from .codes import CompressionCodec, Encoding, PageType
 
 
 def _u32(bytes: List[UInt8], offset: Int, end: Int) raises -> UInt32:
@@ -134,29 +135,33 @@ def _flat_page_values(
         raise Error("Definition levels exceed output validity")
     var start = 0
     var end = 0
-    if h.page_type == 0:
-        if nullable:
-            if h.definition_level_encoding != 3:
-                raise Error("Only hybrid definition levels are supported")
-            start = 4
-            var length = Int(_u32(data, 0, len(data)))
-            if length > len(data) - start:
-                raise Error("Definition levels exceed page")
-            end = start + length
-    elif h.page_type == 3:
-        if h.repetition_levels_byte_length != 0:
-            raise Error("Flat column has repetition levels")
-        end = h.definition_levels_byte_length
-        if end < 0 or end > len(data) or (not nullable and end != 0):
-            raise Error("Invalid definition-level length")
-    else:
-        raise Error("Expected a data page")
+    match h.page_type:
+        case PageType.DATA_PAGE:
+            if nullable:
+                if h.definition_level_encoding != Encoding.RLE:
+                    raise Error("Only hybrid definition levels are supported")
+                start = 4
+                var length = Int(_u32(data, 0, len(data)))
+                if length > len(data) - start:
+                    raise Error("Definition levels exceed page")
+                end = start + length
+        case PageType.DATA_PAGE_V2:
+            if h.repetition_levels_byte_length != 0:
+                raise Error("Flat column has repetition levels")
+            end = h.definition_levels_byte_length
+            if end < 0 or end > len(data) or (not nullable and end != 0):
+                raise Error("Invalid definition-level length")
+        case _:
+            raise Error("Expected a data page")
     var present = h.num_values
     if nullable:
         present = _definition_levels(
             data, start, end, h.num_values, validity, output
         )
-    if h.page_type == 3 and h.num_nulls != h.num_values - present:
+    if (
+        h.page_type == PageType.DATA_PAGE_V2
+        and h.num_nulls != h.num_values - present
+    ):
         raise Error("V2 null count disagrees with levels")
     return end, present
 
@@ -168,13 +173,18 @@ def _page_body(
     validate_codec(codec)
     if len(bytes) != h.compressed_page_size:
         raise Error("Page body length disagrees with header")
-    if codec == 0 or (h.page_type == 3 and not h.is_compressed):
+    if codec == CompressionCodec.UNCOMPRESSED or (
+        h.page_type == PageType.DATA_PAGE_V2 and not h.is_compressed
+    ):
         if len(bytes) != h.uncompressed_page_size:
             raise Error("Uncompressed page body sizes disagree")
         return bytes^
-    if h.page_type == 0 or h.page_type == 2:
+    if (
+        h.page_type == PageType.DATA_PAGE
+        or h.page_type == PageType.DICTIONARY_PAGE
+    ):
         return decompress(codec, bytes, h.uncompressed_page_size)
-    if h.page_type != 3:
+    if h.page_type != PageType.DATA_PAGE_V2:
         raise Error("Expected a data page")
     if (
         h.repetition_levels_byte_length < 0

@@ -6,6 +6,7 @@ V2 starts at row boundaries, while unindexed V1 may continue a prior row.
 from .hybrid import _HybridDecoder
 from .pages import PageHeader
 from .flat_pages import _u32
+from .codes import Encoding, PageType
 
 
 def _level_width(maximum: Int) -> Int:
@@ -44,46 +45,49 @@ struct _NestedLevels(Movable):
         var rep_end = 0
         var def_start: Int
         var def_end: Int
-        if h.page_type == 0:
-            if max_rep != 0:
-                if h.repetition_level_encoding != 3:
+        match h.page_type:
+            case PageType.DATA_PAGE:
+                if max_rep != 0:
+                    if h.repetition_level_encoding != Encoding.RLE:
+                        raise Error(
+                            "Nested reader requires hybrid repetition levels"
+                        )
+                    rep_start = 4
+                    var size = Int(_u32(data, 0, len(data)))
+                    if size > len(data) - rep_start:
+                        raise Error("Repetition levels exceed page")
+                    rep_end = rep_start + size
+                def_start = rep_end
+                def_end = rep_end
+                if max_def != 0:
+                    if h.definition_level_encoding != Encoding.RLE:
+                        raise Error(
+                            "Nested reader requires hybrid definition levels"
+                        )
+                    var size = Int(_u32(data, def_start, len(data)))
+                    def_start += 4
+                    if size > len(data) - def_start:
+                        raise Error("Definition levels exceed page")
+                    def_end = def_start + size
+            case PageType.DATA_PAGE_V2:
+                rep_end = h.repetition_levels_byte_length
+                def_start = rep_end
+                if (
+                    rep_end < 0
+                    or rep_end > len(data)
+                    or h.definition_levels_byte_length < 0
+                    or h.definition_levels_byte_length > len(data) - rep_end
+                ):
+                    raise Error("V2 levels exceed page")
+                def_end = rep_end + h.definition_levels_byte_length
+                if (max_rep == 0 and rep_end != 0) or (
+                    max_def == 0 and def_end != def_start
+                ):
                     raise Error(
-                        "Nested reader requires hybrid repetition levels"
+                        "Unexpected levels for required/nonrepeated leaf"
                     )
-                rep_start = 4
-                var size = Int(_u32(data, 0, len(data)))
-                if size > len(data) - rep_start:
-                    raise Error("Repetition levels exceed page")
-                rep_end = rep_start + size
-            def_start = rep_end
-            def_end = rep_end
-            if max_def != 0:
-                if h.definition_level_encoding != 3:
-                    raise Error(
-                        "Nested reader requires hybrid definition levels"
-                    )
-                var size = Int(_u32(data, def_start, len(data)))
-                def_start += 4
-                if size > len(data) - def_start:
-                    raise Error("Definition levels exceed page")
-                def_end = def_start + size
-        elif h.page_type == 3:
-            rep_end = h.repetition_levels_byte_length
-            def_start = rep_end
-            if (
-                rep_end < 0
-                or rep_end > len(data)
-                or h.definition_levels_byte_length < 0
-                or h.definition_levels_byte_length > len(data) - rep_end
-            ):
-                raise Error("V2 levels exceed page")
-            def_end = rep_end + h.definition_levels_byte_length
-            if (max_rep == 0 and rep_end != 0) or (
-                max_def == 0 and def_end != def_start
-            ):
-                raise Error("Unexpected levels for required/nonrepeated leaf")
-        else:
-            raise Error("Expected nested data page")
+            case _:
+                raise Error("Expected nested data page")
         self.repetitions = _HybridDecoder(
             rep_start,
             rep_end,
@@ -116,7 +120,11 @@ struct _NestedLevels(Movable):
             definition = Int(self.definitions.next(data))
         if rep > self.max_rep or definition > self.max_def:
             raise Error("Level exceeds schema-derived maximum")
-        if self.first and self.header.page_type == 3 and rep != 0:
+        if (
+            self.first
+            and self.header.page_type == PageType.DATA_PAGE_V2
+            and rep != 0
+        ):
             raise Error("V2 page must start at a row boundary")
         self.first = False
         self.remaining -= 1
@@ -129,7 +137,7 @@ struct _NestedLevels(Movable):
             raise Error("Missing nested levels")
         self.repetitions.finish()
         self.definitions.finish()
-        if self.header.page_type == 3 and (
+        if self.header.page_type == PageType.DATA_PAGE_V2 and (
             self.header.num_nulls != self.header.num_values - self.present
             or self.header.num_rows != self.rows
         ):

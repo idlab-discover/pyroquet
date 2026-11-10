@@ -53,19 +53,20 @@ def _row_group_rows(mut reader: CompactReader) raises -> Int64:
             if (seen & bit) != 0:
                 raise Error("Duplicate required row-group field")
             seen |= bit
-        if field.field_id == 1:
-            var count = _struct_list(reader, field)
-            for _ in range(count):
-                reader.skip_field(FieldHeader(0, CompactType.STRUCT))
-        elif field.field_id == 2:
-            _expect(field, CompactType.I64)
-            if reader.read_i64() < 0:
-                raise Error("Negative row-group byte size")
-        elif field.field_id == 3:
-            _expect(field, CompactType.I64)
-            rows = reader.read_i64()
-        else:
-            reader.skip_field(field)
+        match field.field_id:
+            case 1:
+                var count = _struct_list(reader, field)
+                for _ in range(count):
+                    reader.skip_field(FieldHeader(0, CompactType.STRUCT))
+            case 2:
+                _expect(field, CompactType.I64)
+                if reader.read_i64() < 0:
+                    raise Error("Negative row-group byte size")
+            case 3:
+                _expect(field, CompactType.I64)
+                rows = reader.read_i64()
+            case _:
+                reader.skip_field(field)
     reader.end_struct()
     if seen != 7 or rows < 0:
         raise Error("Missing or invalid required row-group fields")
@@ -92,26 +93,27 @@ def parse_footer(
             if (seen & bit) != 0:
                 raise Error("Duplicate required footer field")
             seen |= bit
-        if field.field_id == 1:
-            _expect(field, CompactType.I32)
-            version = reader.read_i32()
-        elif field.field_id == 2:
-            schema_nodes = _struct_list(reader, field)
-            for _ in range(schema_nodes):
-                reader.skip_field(FieldHeader(0, CompactType.STRUCT))
-        elif field.field_id == 3:
-            _expect(field, CompactType.I64)
-            rows = reader.read_i64()
-        elif field.field_id == 4:
-            var count = _struct_list(reader, field)
-            for _ in range(count):
-                var group_rows = _row_group_rows(reader)
-                if group_rows > Int64.MAX - total_rows:
-                    raise Error("Parquet row count overflow")
-                total_rows += group_rows
-                groups.append(group_rows)
-        else:
-            reader.skip_field(field)
+        match field.field_id:
+            case 1:
+                _expect(field, CompactType.I32)
+                version = reader.read_i32()
+            case 2:
+                schema_nodes = _struct_list(reader, field)
+                for _ in range(schema_nodes):
+                    reader.skip_field(FieldHeader(0, CompactType.STRUCT))
+            case 3:
+                _expect(field, CompactType.I64)
+                rows = reader.read_i64()
+            case 4:
+                var count = _struct_list(reader, field)
+                for _ in range(count):
+                    var group_rows = _row_group_rows(reader)
+                    if group_rows > Int64.MAX - total_rows:
+                        raise Error("Parquet row count overflow")
+                    total_rows += group_rows
+                    groups.append(group_rows)
+            case _:
+                reader.skip_field(field)
     reader.end_struct()
     reader.finish()
     if seen != 15 or schema_nodes == 0 or rows < 0:

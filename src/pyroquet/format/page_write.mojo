@@ -6,6 +6,7 @@ implementation here depends only on physical page framing, never column storage.
 from ..io import NewFile
 from .flat_writer import _plain_header
 from ..compression import compress, validate_codec
+from .codes import CompressionCodec
 
 
 struct NumericWriteOptions(ImplicitlyCopyable):
@@ -96,7 +97,7 @@ def _write_page(
     var body_size = len(bytes)
     var compressed = List[UInt8]()
     var is_compressed = False
-    if options.codec != 0:
+    if options.codec != CompressionCodec.UNCOMPRESSED:
         if options.page_version == 1:
             compressed = compress(options.codec, bytes, options.max_page_bytes)
             is_compressed = True

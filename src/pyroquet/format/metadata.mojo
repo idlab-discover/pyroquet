@@ -209,24 +209,25 @@ def _schema_element(mut r: CompactReader) raises -> SchemaElement:
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 10)
-        if f.field_id == 4:
-            _expect(f, CompactType.BINARY)
-            node.name = r.read_string()
-        elif f.field_id == 10:
-            _expect(f, CompactType.STRUCT)
-            _logical(r, node)
-        elif f.field_id == 1:
-            node.physical_type = Int(_nonnegative(r, f, False))
-        elif f.field_id == 2:
-            node.type_length = Int(_nonnegative(r, f, False))
-        elif f.field_id == 3:
-            node.repetition = Int(_nonnegative(r, f, False))
-        elif f.field_id == 5:
-            node.num_children = Int(_nonnegative(r, f, False))
-        elif f.field_id == 6:
-            node.converted_type = Int(_nonnegative(r, f, False))
-        else:
-            r.skip_field(f)
+        match f.field_id:
+            case 4:
+                _expect(f, CompactType.BINARY)
+                node.name = r.read_string()
+            case 10:
+                _expect(f, CompactType.STRUCT)
+                _logical(r, node)
+            case 1:
+                node.physical_type = Int(_nonnegative(r, f, False))
+            case 2:
+                node.type_length = Int(_nonnegative(r, f, False))
+            case 3:
+                node.repetition = Int(_nonnegative(r, f, False))
+            case 5:
+                node.num_children = Int(_nonnegative(r, f, False))
+            case 6:
+                node.converted_type = Int(_nonnegative(r, f, False))
+            case _:
+                r.skip_field(f)
     r.end_struct()
     if not (seen & 16):
         raise Error("Missing schema name")
@@ -315,42 +316,43 @@ def _column_metadata(mut r: CompactReader, mut col: ColumnChunk) raises:
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 17)
-        if f.field_id == 1:
-            col.physical_type = Int(_nonnegative(r, f, False))
-        elif f.field_id == 2:
-            _expect(f, CompactType.LIST)
-            var h = r.read_collection()
-            if h.kind != CompactType.I32 and not (
-                h.size == 0 and h.kind == CompactType.STOP
-            ):
-                raise Error("Expected encoding enum list")
-            for _ in range(h.size):
-                var encoding = Int(r.read_i32())
-                if encoding < 0:
-                    raise Error("Negative encoding enum")
-                col.encodings.append(encoding)
-        elif f.field_id == 3:
-            col.path = _strings(r, f)
-        elif f.field_id == 4:
-            col.codec = Int(_nonnegative(r, f, False))
-        elif f.field_id == 5:
-            col.num_values = _nonnegative(r, f)
-        elif f.field_id == 6:
-            col.total_uncompressed_size = _nonnegative(r, f)
-        elif f.field_id == 7:
-            col.total_compressed_size = _nonnegative(r, f)
-        elif f.field_id == 9:
-            col.data_page_offset = _nonnegative(r, f)
-        elif f.field_id == 10:
-            col.index_page_offset = _nonnegative(r, f)
-        elif f.field_id == 11:
-            col.dictionary_page_offset = _nonnegative(r, f)
-        elif f.field_id == 14:
-            col.bloom_filter_offset = _nonnegative(r, f)
-        elif f.field_id == 15:
-            col.bloom_filter_length = _nonnegative(r, f, False)
-        else:
-            r.skip_field(f)
+        match f.field_id:
+            case 1:
+                col.physical_type = Int(_nonnegative(r, f, False))
+            case 2:
+                _expect(f, CompactType.LIST)
+                var h = r.read_collection()
+                if h.kind != CompactType.I32 and not (
+                    h.size == 0 and h.kind == CompactType.STOP
+                ):
+                    raise Error("Expected encoding enum list")
+                for _ in range(h.size):
+                    var encoding = Int(r.read_i32())
+                    if encoding < 0:
+                        raise Error("Negative encoding enum")
+                    col.encodings.append(encoding)
+            case 3:
+                col.path = _strings(r, f)
+            case 4:
+                col.codec = Int(_nonnegative(r, f, False))
+            case 5:
+                col.num_values = _nonnegative(r, f)
+            case 6:
+                col.total_uncompressed_size = _nonnegative(r, f)
+            case 7:
+                col.total_compressed_size = _nonnegative(r, f)
+            case 9:
+                col.data_page_offset = _nonnegative(r, f)
+            case 10:
+                col.index_page_offset = _nonnegative(r, f)
+            case 11:
+                col.dictionary_page_offset = _nonnegative(r, f)
+            case 14:
+                col.bloom_filter_offset = _nonnegative(r, f)
+            case 15:
+                col.bloom_filter_length = _nonnegative(r, f, False)
+            case _:
+                r.skip_field(f)
     r.end_struct()
     if (seen & 766) != 766:
         raise Error("Missing required ColumnMetaData field")
@@ -365,27 +367,28 @@ def _column(mut r: CompactReader) raises -> ColumnChunk:
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 9)
-        if f.field_id == 1:
-            _expect(f, CompactType.BINARY)
-            col.file_path = r.read_string()
-        elif f.field_id == 2:
-            _expect(f, CompactType.I64)
-            col.file_offset = r.read_i64()
-        elif f.field_id == 3:
-            _expect(f, CompactType.STRUCT)
-            _column_metadata(r, col)
-        elif f.field_id == 8 or f.field_id == 9:
-            raise Error("Encrypted column metadata is unsupported")
-        elif f.field_id == 4:
-            col.offset_index_offset = _nonnegative(r, f)
-        elif f.field_id == 5:
-            col.offset_index_length = _nonnegative(r, f, False)
-        elif f.field_id == 6:
-            col.column_index_offset = _nonnegative(r, f)
-        elif f.field_id == 7:
-            col.column_index_length = _nonnegative(r, f, False)
-        else:
-            r.skip_field(f)
+        match f.field_id:
+            case 1:
+                _expect(f, CompactType.BINARY)
+                col.file_path = r.read_string()
+            case 2:
+                _expect(f, CompactType.I64)
+                col.file_offset = r.read_i64()
+            case 3:
+                _expect(f, CompactType.STRUCT)
+                _column_metadata(r, col)
+            case 8 | 9:
+                raise Error("Encrypted column metadata is unsupported")
+            case 4:
+                col.offset_index_offset = _nonnegative(r, f)
+            case 5:
+                col.offset_index_length = _nonnegative(r, f, False)
+            case 6:
+                col.column_index_offset = _nonnegative(r, f)
+            case 7:
+                col.column_index_length = _nonnegative(r, f, False)
+            case _:
+                r.skip_field(f)
     r.end_struct()
     if (seen & 12) != 12:
         raise Error("ColumnChunk requires file_offset and plaintext metadata")
@@ -401,20 +404,21 @@ def _group(mut r: CompactReader) raises -> RowGroup:
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 7)
-        if f.field_id == 1:
-            var n = _struct_list(r, f)
-            for _ in range(n):
-                group.columns.append(_column(r))
-        elif f.field_id == 2:
-            group.total_byte_size = _nonnegative(r, f)
-        elif f.field_id == 3:
-            group.num_rows = _nonnegative(r, f)
-        elif f.field_id == 5:
-            group.file_offset = _nonnegative(r, f)
-        elif f.field_id == 6:
-            group.total_compressed_size = _nonnegative(r, f)
-        else:
-            r.skip_field(f)
+        match f.field_id:
+            case 1:
+                var n = _struct_list(r, f)
+                for _ in range(n):
+                    group.columns.append(_column(r))
+            case 2:
+                group.total_byte_size = _nonnegative(r, f)
+            case 3:
+                group.num_rows = _nonnegative(r, f)
+            case 5:
+                group.file_offset = _nonnegative(r, f)
+            case 6:
+                group.total_compressed_size = _nonnegative(r, f)
+            case _:
+                r.skip_field(f)
     r.end_struct()
     if (seen & 14) != 14:
         raise Error("Missing required RowGroup fields")
@@ -487,22 +491,23 @@ def parse_metadata(
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 9)
-        if f.field_id == 1:
-            result.version = _i32(r, f)
-        elif f.field_id == 2:
-            var n = _struct_list(r, f)
-            for _ in range(n):
-                result.schema.append(_schema_element(r))
-        elif f.field_id == 3:
-            result.num_rows = _nonnegative(r, f)
-        elif f.field_id == 4:
-            var n = _struct_list(r, f)
-            for _ in range(n):
-                result.row_groups.append(_group(r))
-        elif f.field_id == 8 or f.field_id == 9:
-            raise Error("Encrypted file metadata is unsupported")
-        else:
-            r.skip_field(f)
+        match f.field_id:
+            case 1:
+                result.version = _i32(r, f)
+            case 2:
+                var n = _struct_list(r, f)
+                for _ in range(n):
+                    result.schema.append(_schema_element(r))
+            case 3:
+                result.num_rows = _nonnegative(r, f)
+            case 4:
+                var n = _struct_list(r, f)
+                for _ in range(n):
+                    result.row_groups.append(_group(r))
+            case 8 | 9:
+                raise Error("Encrypted file metadata is unsupported")
+            case _:
+                r.skip_field(f)
     r.end_struct()
     r.finish()
     if (seen & 30) != 30 or (result.version != 1 and result.version != 2):

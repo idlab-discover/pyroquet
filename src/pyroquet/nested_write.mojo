@@ -14,6 +14,7 @@ from .table_write import TableWriteOptions, ColumnWriteOptions
 from .numojo_write import _append_plain
 from .io import NewFile
 from .format.page_write import NumericWriteOptions, _append_u32, _write_page
+from .format.codes import Encoding
 from .format.flat_writer import (
     _WrittenGroup,
     _WrittenField,
@@ -447,9 +448,9 @@ def _nested_footer(
             _i32(writer, 1, field.physical)
             writer.write_field(2, CompactType.LIST)
             writer.write_collection(CompactType.I32, 2 if has_levels else 1)
-            writer.write_i32(0)
+            writer.write_i32(Encoding.PLAIN)
             if has_levels:
-                writer.write_i32(3)
+                writer.write_i32(Encoding.RLE)
             writer.write_field(3, CompactType.LIST)
             writer.write_collection(CompactType.BINARY, path_size)
             for i in path:

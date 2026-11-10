@@ -2,6 +2,7 @@
 
 from ..boolean_column import BooleanColumn
 from .hybrid import _HybridDecoder
+from .codes import Encoding
 
 
 def decode_boolean_values(
@@ -10,14 +11,14 @@ def decode_boolean_values(
     if count < 0:
         raise Error("Negative Boolean present count")
     var size = count // 8 + Int(count % 8 != 0)
-    if encoding == 0:
+    if encoding == Encoding.PLAIN:
         if len(data) != size:
             raise Error("Boolean PLAIN length mismatch")
         var values = data.copy()
         if count % 8 != 0:
             values[size - 1] &= (UInt8(1) << UInt8(count % 8)) - 1
         return BooleanColumn(count, values^)
-    if encoding != 3:
+    if encoding != Encoding.RLE:
         raise Error("Unsupported Boolean value encoding")
     if len(data) < 4:
         raise Error("Truncated Boolean RLE length")

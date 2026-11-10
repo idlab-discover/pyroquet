@@ -7,6 +7,7 @@ rejected until their corresponding header semantics are supported.
 from std.io.file import FileHandle
 from compact_protocol import CompactReader, CompactLimits, CompactType
 from .footer import _expect, _read_footer_bytes_from_file
+from .codes import CompressionCodec, Encoding, PageHeaderField, PageType
 from .metadata import (
     ColumnChunk,
     _seen,
@@ -89,6 +90,14 @@ struct PageLocation(ImplicitlyCopyable):
     var next_offset: Int64
 
 
+def _is_level_encoding(encoding: Int) -> Bool:
+    match encoding:
+        case Encoding.RLE | Encoding.BIT_PACKED:
+            return True
+        case _:
+            return False
+
+
 def _specific_header(mut r: CompactReader, kind: Int, mut h: PageHeader) raises:
     r.begin_struct()
     var seen = 0
@@ -97,45 +106,49 @@ def _specific_header(mut r: CompactReader, kind: Int, mut h: PageHeader) raises:
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 8)
-        if kind == 6:
-            # IndexPageHeader is an empty struct in the current specification.
-            r.skip_field(f)
-        elif f.field_id == 1:
-            h.num_values = Int(_nonnegative(r, f, False))
-        elif kind == 8:
-            if f.field_id == 2:
-                h.num_nulls = Int(_nonnegative(r, f, False))
-            elif f.field_id == 3:
-                h.num_rows = Int(_nonnegative(r, f, False))
-            elif f.field_id == 4:
-                h.encoding = Int(_nonnegative(r, f, False))
-            elif f.field_id == 5:
-                h.definition_levels_byte_length = Int(_nonnegative(r, f, False))
-            elif f.field_id == 6:
-                h.repetition_levels_byte_length = Int(_nonnegative(r, f, False))
-            elif f.field_id == 7:
-                h.is_compressed = f.boolean()
-            else:
+        match (kind, f.field_id):
+            case (PageHeaderField.INDEX_PAGE, _):
+                # IndexPageHeader is an empty struct in the current specification.
                 r.skip_field(f)
-        elif f.field_id == 2:
-            h.encoding = Int(_nonnegative(r, f, False))
-        elif kind == 5 and f.field_id == 3:
-            h.definition_level_encoding = Int(_nonnegative(r, f, False))
-        elif kind == 5 and f.field_id == 4:
-            h.repetition_level_encoding = Int(_nonnegative(r, f, False))
-        elif kind == 7 and f.field_id == 3:
-            h.is_sorted = f.boolean()
-            h.has_is_sorted = True
-        else:
-            r.skip_field(f)
+            case (_, 1):
+                h.num_values = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE_V2, 2):
+                h.num_nulls = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE_V2, 3):
+                h.num_rows = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE_V2, 4):
+                h.encoding = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE_V2, 5):
+                h.definition_levels_byte_length = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE_V2, 6):
+                h.repetition_levels_byte_length = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE_V2, 7):
+                h.is_compressed = f.boolean()
+            case (PageHeaderField.DATA_PAGE_V2, _):
+                r.skip_field(f)
+            case (_, 2):
+                h.encoding = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE, 3):
+                h.definition_level_encoding = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DATA_PAGE, 4):
+                h.repetition_level_encoding = Int(_nonnegative(r, f, False))
+            case (PageHeaderField.DICTIONARY_PAGE, 3):
+                h.is_sorted = f.boolean()
+                h.has_is_sorted = True
+            case _:
+                r.skip_field(f)
     r.end_struct()
+    # Bit i of `seen` is field id i; the masks are each struct's required ids.
     var required = 0
-    if kind == 5:
-        required = 30
-    elif kind == 7:
-        required = 6
-    elif kind == 8:
-        required = 126
+    match kind:
+        case PageHeaderField.DATA_PAGE:
+            required = 30  # 1-4
+        case PageHeaderField.DICTIONARY_PAGE:
+            required = 6  # 1-2
+        case PageHeaderField.DATA_PAGE_V2:
+            required = 126  # 1-6
+        case _:
+            pass
     if (seen & required) != required:
         raise Error("Missing required page-specific header fields")
 
@@ -163,24 +176,30 @@ def parse_page_header(
         if f.kind == CompactType.STOP:
             break
         _seen(seen, f, 8)
-        if f.field_id == 1:
-            h.page_type = _i32(r, f)
-        elif f.field_id == 2:
-            h.uncompressed_page_size = Int(_nonnegative(r, f, False))
-        elif f.field_id == 3:
-            h.compressed_page_size = Int(_nonnegative(r, f, False))
-        elif f.field_id == 4:
-            _expect(f, CompactType.I32)
-            h.crc = r.read_i32()
-            h.has_crc = True
-        elif f.field_id >= 5 and f.field_id <= 8:
-            if specific != -1:
-                raise Error("Multiple page-specific headers")
-            _expect(f, CompactType.STRUCT)
-            specific = f.field_id
-            _specific_header(r, specific, h)
-        else:
-            r.skip_field(f)
+        match f.field_id:
+            case 1:
+                h.page_type = _i32(r, f)
+            case 2:
+                h.uncompressed_page_size = Int(_nonnegative(r, f, False))
+            case 3:
+                h.compressed_page_size = Int(_nonnegative(r, f, False))
+            case 4:
+                _expect(f, CompactType.I32)
+                h.crc = r.read_i32()
+                h.has_crc = True
+            case (
+                PageHeaderField.DATA_PAGE
+                | PageHeaderField.INDEX_PAGE
+                | PageHeaderField.DICTIONARY_PAGE
+                | PageHeaderField.DATA_PAGE_V2
+            ):
+                if specific != -1:
+                    raise Error("Multiple page-specific headers")
+                _expect(f, CompactType.STRUCT)
+                specific = f.field_id
+                _specific_header(r, specific, h)
+            case _:
+                r.skip_field(f)
     r.end_struct()
     h.header_size = r.position()
     # Do not finish(): the lookahead may also contain payload or later pages.
@@ -188,39 +207,38 @@ def parse_page_header(
         raise Error("Missing required PageHeader fields")
     if h.page_type < 0 or h.page_type > 3:
         raise Error("Unsupported Parquet page type")
-    if specific != h.page_type + 5:
+    if specific != h.page_type + PageHeaderField.DATA_PAGE:
         raise Error("Page type disagrees with its specific header")
     if (
         h.compressed_page_size > limits.max_page_bytes
         or h.uncompressed_page_size > limits.max_page_bytes
     ):
         raise Error("Page size exceeds configured limit")
-    if h.page_type == 0:
-        if (
-            h.definition_level_encoding != 3
-            and h.definition_level_encoding != 4
-        ) or (
-            h.repetition_level_encoding != 3
-            and h.repetition_level_encoding != 4
-        ):
-            raise Error("Invalid V1 level encoding")
-    elif h.page_type == 3:
-        h.definition_level_encoding = 3
-        h.repetition_level_encoding = 3
-        if h.num_nulls > h.num_values or h.num_rows > h.num_values:
-            raise Error("Invalid V2 value/null/row counts")
-        var levels = Int64(h.definition_levels_byte_length) + Int64(
-            h.repetition_levels_byte_length
-        )
-        if levels > Int64(h.compressed_page_size) or levels > Int64(
-            h.uncompressed_page_size
-        ):
-            raise Error("V2 levels exceed page payload")
-        if (
-            not h.is_compressed
-            and h.compressed_page_size != h.uncompressed_page_size
-        ):
-            raise Error("Uncompressed V2 payload sizes disagree")
+    match h.page_type:
+        case PageType.DATA_PAGE:
+            if not _is_level_encoding(
+                h.definition_level_encoding
+            ) or not _is_level_encoding(h.repetition_level_encoding):
+                raise Error("Invalid V1 level encoding")
+        case PageType.DATA_PAGE_V2:
+            h.definition_level_encoding = Encoding.RLE
+            h.repetition_level_encoding = Encoding.RLE
+            if h.num_nulls > h.num_values or h.num_rows > h.num_values:
+                raise Error("Invalid V2 value/null/row counts")
+            var levels = Int64(h.definition_levels_byte_length) + Int64(
+                h.repetition_levels_byte_length
+            )
+            if levels > Int64(h.compressed_page_size) or levels > Int64(
+                h.uncompressed_page_size
+            ):
+                raise Error("V2 levels exceed page payload")
+            if (
+                not h.is_compressed
+                and h.compressed_page_size != h.uncompressed_page_size
+            ):
+                raise Error("Uncompressed V2 payload sizes disagree")
+        case _:
+            pass
     return h
 
 
@@ -305,24 +323,27 @@ struct _ColumnPages(Movable):
             raise Error("Page count exceeds configured limit")
         var page = read_page_header(file, self.offset, self.end, self.limits)
         var h = page.header
-        if h.page_type == 2:
-            if self.page_count != 0 or self.dictionary != -1:
-                raise Error(
-                    "Dictionary must be the first and only dictionary page"
-                )
-            self.dictionary = self.offset
-        elif h.page_type == 0 or h.page_type == 3:
-            if self.first_data == -1:
-                self.first_data = self.offset
-            self.values = _add(self.values, Int64(h.num_values))
-            if h.page_type == 0:
-                self.all_v2 = False
-            else:
-                self.v2_rows = _add(self.v2_rows, Int64(h.num_rows))
-                if self.max_repetition == 0 and h.num_rows != h.num_values:
-                    raise Error("Non-repeated V2 row/value counts disagree")
+        match h.page_type:
+            case PageType.DICTIONARY_PAGE:
+                if self.page_count != 0 or self.dictionary != -1:
+                    raise Error(
+                        "Dictionary must be the first and only dictionary page"
+                    )
+                self.dictionary = self.offset
+            case PageType.DATA_PAGE | PageType.DATA_PAGE_V2:
+                if self.first_data == -1:
+                    self.first_data = self.offset
+                self.values = _add(self.values, Int64(h.num_values))
+                if h.page_type == PageType.DATA_PAGE:
+                    self.all_v2 = False
+                else:
+                    self.v2_rows = _add(self.v2_rows, Int64(h.num_rows))
+                    if self.max_repetition == 0 and h.num_rows != h.num_values:
+                        raise Error("Non-repeated V2 row/value counts disagree")
+            case _:
+                pass
         if (
-            self.col.codec == 0
+            self.col.codec == CompressionCodec.UNCOMPRESSED
             and h.compressed_page_size != h.uncompressed_page_size
         ):
             raise Error("UNCOMPRESSED codec has inconsistent page sizes")

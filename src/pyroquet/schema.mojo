@@ -80,29 +80,31 @@ struct SchemaNode(Copyable, Movable):
         return -1
 
     def dtype(self) raises -> DType:
-        if self._kind == Self.UINT32:
-            return DType.uint32
-        if self._kind == Self.INT8:
-            return DType.int8
-        if self._kind == Self.UINT8:
-            return DType.uint8
-        if self._kind == Self.INT16:
-            return DType.int16
-        if self._kind == Self.UINT16:
-            return DType.uint16
-        if self._kind == Self.INT32:
-            return DType.int32
-        if self._kind == Self.INT64:
-            return DType.int64
-        if self._kind == Self.UINT64:
-            return DType.uint64
-        if self._kind == Self.FLOAT16:
-            return DType.float16
-        if self._kind == Self.FLOAT32:
-            return DType.float32
-        if self._kind == Self.FLOAT64:
-            return DType.float64
-        raise Error("Schema node is not numeric")
+        match self._kind:
+            case Self.UINT32:
+                return DType.uint32
+            case Self.INT8:
+                return DType.int8
+            case Self.UINT8:
+                return DType.uint8
+            case Self.INT16:
+                return DType.int16
+            case Self.UINT16:
+                return DType.uint16
+            case Self.INT32:
+                return DType.int32
+            case Self.INT64:
+                return DType.int64
+            case Self.UINT64:
+                return DType.uint64
+            case Self.FLOAT16:
+                return DType.float16
+            case Self.FLOAT32:
+                return DType.float32
+            case Self.FLOAT64:
+                return DType.float64
+            case _:
+                raise Error("Schema node is not numeric")
 
     def parent(self) -> Int:
         return self._parent

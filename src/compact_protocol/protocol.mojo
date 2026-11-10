@@ -278,52 +278,53 @@ struct CompactReader(Movable):
         self._skip(field.kind, len(self._frames), True)
 
     def _skip(mut self, kind: Int, depth: Int, in_field: Bool) raises:
-        if kind == CompactType.TRUE or kind == CompactType.FALSE:
-            if not in_field:
-                _ = self.read_bool()
-        elif kind == CompactType.BYTE:
-            self._advance(1)
-        elif kind == CompactType.I16:
-            _ = self.read_i16()
-        elif kind == CompactType.I32:
-            _ = self.read_i32()
-        elif kind == CompactType.I64:
-            _ = self.read_i64()
-        elif kind == CompactType.DOUBLE:
-            self._advance(8)
-        elif kind == CompactType.BINARY:
-            var size = self._length(self._limits.max_binary_bytes)
-            self._advance(size)
-        elif kind == CompactType.UUID:
-            self._advance(16)
-        elif kind == CompactType.STRUCT:
-            self._require(
-                depth < self._limits.max_depth, "skip nesting exceeds limit"
-            )
-            self.begin_struct()
-            while True:
-                var field = self.next_field()
-                if field.kind == CompactType.STOP:
-                    break
-                self._skip(field.kind, depth + 1, True)
-            self.end_struct()
-        elif kind == CompactType.LIST or kind == CompactType.SET:
-            self._require(
-                depth < self._limits.max_depth, "skip nesting exceeds limit"
-            )
-            var header = self.read_collection()
-            for _ in range(header.size):
-                self._skip(header.kind, depth + 1, False)
-        elif kind == CompactType.MAP:
-            self._require(
-                depth < self._limits.max_depth, "skip nesting exceeds limit"
-            )
-            var header = self.read_map()
-            for _ in range(header.size):
-                self._skip(header.key_kind, depth + 1, False)
-                self._skip(header.value_kind, depth + 1, False)
-        else:
-            self._require(False, "invalid skip type")
+        match kind:
+            case CompactType.TRUE | CompactType.FALSE:
+                if not in_field:
+                    _ = self.read_bool()
+            case CompactType.BYTE:
+                self._advance(1)
+            case CompactType.I16:
+                _ = self.read_i16()
+            case CompactType.I32:
+                _ = self.read_i32()
+            case CompactType.I64:
+                _ = self.read_i64()
+            case CompactType.DOUBLE:
+                self._advance(8)
+            case CompactType.BINARY:
+                var size = self._length(self._limits.max_binary_bytes)
+                self._advance(size)
+            case CompactType.UUID:
+                self._advance(16)
+            case CompactType.STRUCT:
+                self._require(
+                    depth < self._limits.max_depth, "skip nesting exceeds limit"
+                )
+                self.begin_struct()
+                while True:
+                    var field = self.next_field()
+                    if field.kind == CompactType.STOP:
+                        break
+                    self._skip(field.kind, depth + 1, True)
+                self.end_struct()
+            case CompactType.LIST | CompactType.SET:
+                self._require(
+                    depth < self._limits.max_depth, "skip nesting exceeds limit"
+                )
+                var header = self.read_collection()
+                for _ in range(header.size):
+                    self._skip(header.kind, depth + 1, False)
+            case CompactType.MAP:
+                self._require(
+                    depth < self._limits.max_depth, "skip nesting exceeds limit"
+                )
+                var header = self.read_map()
+                for _ in range(header.size):
+                    self._skip(header.key_kind, depth + 1, False)
+                    self._skip(header.value_kind, depth + 1, False)
+            case _:
+                self._require(False, "invalid skip type")
 
     def finish(self) raises:
         self._require(len(self._frames) == 0, "unclosed struct")

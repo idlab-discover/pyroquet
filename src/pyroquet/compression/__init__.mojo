@@ -6,6 +6,7 @@ from mojo_snappy import (
 )
 from .gzip import decode_gzip, encode_gzip
 from .zstd import decode_zstd, encode_zstd
+from ..format.codes import CompressionCodec
 
 
 def _check_start(data: List[UInt8], start: Int) raises:
@@ -14,10 +15,18 @@ def _check_start(data: List[UInt8], start: Int) raises:
 
 
 def validate_codec(codec: Int) raises:
-    if codec != 0 and codec != 1 and codec != 2 and codec != 6:
-        raise Error(
-            "Only UNCOMPRESSED, SNAPPY, GZIP and ZSTD columns are supported"
-        )
+    match codec:
+        case (
+            CompressionCodec.UNCOMPRESSED
+            | CompressionCodec.SNAPPY
+            | CompressionCodec.GZIP
+            | CompressionCodec.ZSTD
+        ):
+            pass
+        case _:
+            raise Error(
+                "Only UNCOMPRESSED, SNAPPY, GZIP and ZSTD columns are supported"
+            )
 
 
 def decompress(
@@ -28,17 +37,21 @@ def decompress(
     The caller applies page budgets before this allocation. Codec workspace
     is transient and separate from page/retained column output budgets.
     """
-    if codec == 1:
-        _check_start(data, start)
-        var decoded = snappy_decompress(data[start:], max_output_bytes=expected)
-        if len(decoded) != expected:
-            raise Error("Snappy decoded length mismatch")
-        return decoded^
-    if codec == 2:
-        return decode_gzip(data, expected, start)
-    if codec == 6:
-        return decode_zstd(data, expected, start)
-    raise Error("Expected a supported compressed codec")
+    match codec:
+        case CompressionCodec.SNAPPY:
+            _check_start(data, start)
+            var decoded = snappy_decompress(
+                data[start:], max_output_bytes=expected
+            )
+            if len(decoded) != expected:
+                raise Error("Snappy decoded length mismatch")
+            return decoded^
+        case CompressionCodec.GZIP:
+            return decode_gzip(data, expected, start)
+        case CompressionCodec.ZSTD:
+            return decode_zstd(data, expected, start)
+        case _:
+            raise Error("Expected a supported compressed codec")
 
 
 def compress(
@@ -49,17 +62,19 @@ def compress(
     allow_expansion: Bool = False,
 ) raises -> List[UInt8]:
     """Encode a page section. V2 may stage bounded expansion before fallback."""
-    if codec == 1:
-        var bound = limit
-        if allow_expansion:
-            bound = snappy_max_compressed_length(len(data) - start)
-        _check_start(data, start)
-        var encoded = snappy_compress(data[start:])
-        if len(encoded) > bound:
-            raise Error("Snappy encoded output exceeds limit")
-        return encoded^
-    if codec == 2:
-        return encode_gzip(data, limit, start, allow_expansion)
-    if codec == 6:
-        return encode_zstd(data, limit, start, allow_expansion)
-    raise Error("Expected a supported compressed codec")
+    match codec:
+        case CompressionCodec.SNAPPY:
+            var bound = limit
+            if allow_expansion:
+                bound = snappy_max_compressed_length(len(data) - start)
+            _check_start(data, start)
+            var encoded = snappy_compress(data[start:])
+            if len(encoded) > bound:
+                raise Error("Snappy encoded output exceeds limit")
+            return encoded^
+        case CompressionCodec.GZIP:
+            return encode_gzip(data, limit, start, allow_expansion)
+        case CompressionCodec.ZSTD:
+            return encode_zstd(data, limit, start, allow_expansion)
+        case _:
+            raise Error("Expected a supported compressed codec")

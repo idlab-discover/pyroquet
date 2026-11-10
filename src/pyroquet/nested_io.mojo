@@ -38,6 +38,7 @@ from .schema import Schema, SchemaNode
 from .table import Column
 from .nested_table import NestedTable, NestedStructure
 from .compression import validate_codec
+from .format.codes import Encoding, PageType
 
 
 def _bitmap_bytes(count: Int) -> Int:
@@ -395,7 +396,7 @@ def _scan_leaf(
             if not next:
                 break
             var h = next.value().header
-            if h.page_type == 2:
+            if h.page_type == PageType.DICTIONARY_PAGE:
                 continue
             var data = file.read_bytes(h.compressed_page_size)
             data = _page_body(data^, h, col.codec)
@@ -454,7 +455,7 @@ def _scan_leaf(
                         states[ancestors[0]].offsets[rows] = children
                 previous_element = is_element
             levels.finish()
-            previous_v2 = h.page_type == 3
+            previous_v2 = h.page_type == PageType.DATA_PAGE_V2
         if group_rows != Int(group.num_rows):
             raise Error("Nested level rows disagree with row group")
         previous_element = False
@@ -505,11 +506,11 @@ def _read_numeric[
             if not next:
                 break
             var h = next.value().header
-            if h.page_type == 2:
+            if h.page_type == PageType.DICTIONARY_PAGE:
                 _check_dictionary_header[dtype](h, limits.max_page_bytes)
             var data = file.read_bytes(h.compressed_page_size)
             data = _page_body(data^, h, col.codec)
-            if h.page_type == 2:
+            if h.page_type == PageType.DICTIONARY_PAGE:
                 dictionary = _plain_dictionary[dtype](data, h.num_values)
                 has_dictionary = True
                 continue
@@ -519,34 +520,40 @@ def _read_numeric[
             var levels = _NestedLevels(
                 data, h, node.max_repetition_level, node.max_definition_level
             )
-            var indexed = h.encoding == 2 or h.encoding == 8
+            var indexed = (
+                h.encoding == Encoding.PLAIN_DICTIONARY
+                or h.encoding == Encoding.RLE_DICTIONARY
+            )
             var ids = _HybridDecoder(0, 0, 0, 0)
             var delta = _DeltaDecoder[
                 64 if size_of[Scalar[dtype]]() == 8 else 32
             ](data, len(data), len(data), 0)
-            if indexed:
-                if not has_dictionary or pos >= len(data):
-                    raise Error("Nested numeric dictionary/ID width missing")
-                ids = _HybridDecoder(
-                    pos + 1, len(data), Int(data[pos]), present
-                )
-            elif h.encoding == 5:
-                comptime if dtype == DType.float16 or dtype == DType.float32 or dtype == DType.float64:
-                    raise Error("Delta requires physical INT32/INT64")
-                else:
-                    delta = _DeltaDecoder[
-                        64 if size_of[Scalar[dtype]]() == 8 else 32
-                    ](data, pos, len(data), present)
-            elif h.encoding == 0:
-                comptime width = 2 if dtype == DType.float16 else (
-                    8 if size_of[Scalar[dtype]]() == 8 else 4
-                )
-                if (len(data) - pos) % width != 0 or (
-                    len(data) - pos
-                ) // width != present:
-                    raise Error("Nested PLAIN payload/count mismatch")
-            else:
-                raise Error("Unsupported nested numeric encoding")
+            match h.encoding:
+                case Encoding.PLAIN_DICTIONARY | Encoding.RLE_DICTIONARY:
+                    if not has_dictionary or pos >= len(data):
+                        raise Error(
+                            "Nested numeric dictionary/ID width missing"
+                        )
+                    ids = _HybridDecoder(
+                        pos + 1, len(data), Int(data[pos]), present
+                    )
+                case Encoding.DELTA_BINARY_PACKED:
+                    comptime if dtype == DType.float16 or dtype == DType.float32 or dtype == DType.float64:
+                        raise Error("Delta requires physical INT32/INT64")
+                    else:
+                        delta = _DeltaDecoder[
+                            64 if size_of[Scalar[dtype]]() == 8 else 32
+                        ](data, pos, len(data), present)
+                case Encoding.PLAIN:
+                    comptime width = 2 if dtype == DType.float16 else (
+                        8 if size_of[Scalar[dtype]]() == 8 else 4
+                    )
+                    if (len(data) - pos) % width != 0 or (
+                        len(data) - pos
+                    ) // width != present:
+                        raise Error("Nested PLAIN payload/count mismatch")
+                case _:
+                    raise Error("Unsupported nested numeric encoding")
             for _ in range(h.num_values):
                 var pair = levels.next(data)
                 var definition = pair[1]
@@ -566,7 +573,7 @@ def _read_numeric[
                                 "Nested numeric dictionary index out of range"
                             )
                         value = dictionary[index]
-                    elif h.encoding == 5:
+                    elif h.encoding == Encoding.DELTA_BINARY_PACKED:
                         value = _delta_value[dtype](delta.next(data))
                     else:
                         value = _plain_value[dtype](data, pos)
@@ -580,7 +587,7 @@ def _read_numeric[
             levels.finish()
             if indexed:
                 ids.finish()
-            elif h.encoding == 5:
+            elif h.encoding == Encoding.DELTA_BINARY_PACKED:
                 delta.finish()
     if output != count:
         raise Error("Nested numeric child count mismatch")
@@ -631,10 +638,13 @@ def _read_binary(
             var h = next.value().header
             var data = file.read_bytes(h.compressed_page_size)
             data = _page_body(data^, h, col.codec)
-            if h.page_type == 2:
+            if h.page_type == PageType.DICTIONARY_PAGE:
                 if (
                     kind == SchemaNode.BOOLEAN
-                    or (h.encoding != 0 and h.encoding != 2)
+                    or (
+                        h.encoding != Encoding.PLAIN
+                        and h.encoding != Encoding.PLAIN_DICTIONARY
+                    )
                     or h.num_values < 0
                     or h.num_values >= limits.max_page_bytes // 8
                 ):
@@ -661,7 +671,10 @@ def _read_binary(
             var decoded = BinaryColumn([0], [])
             var booleans = BooleanColumn(0, [])
             var ids = _HybridDecoder(0, 0, 0, 0)
-            var indexed = h.encoding == 2 or h.encoding == 8
+            var indexed = (
+                h.encoding == Encoding.PLAIN_DICTIONARY
+                or h.encoding == Encoding.RLE_DICTIONARY
+            )
             if kind == SchemaNode.BOOLEAN:
                 if _bitmap_bytes(present) > limits.max_page_bytes:
                     raise Error("Boolean decoded page workspace exceeds budget")
@@ -670,7 +683,7 @@ def _read_binary(
                 if not has_dictionary or len(payload) == 0:
                     raise Error("Nested binary dictionary/ID width missing")
                 ids = _HybridDecoder(1, len(payload), Int(payload[0]), present)
-            elif h.encoding == 0:
+            elif h.encoding == Encoding.PLAIN:
                 if present >= limits.max_page_bytes // 8:
                     raise Error(
                         "Binary decoded page offsets exceed workspace budget"

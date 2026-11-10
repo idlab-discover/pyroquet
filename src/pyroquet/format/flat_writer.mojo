@@ -1,5 +1,6 @@
 """Bounded footer and header emission for flat PLAIN column chunks."""
 from compact_protocol import CompactWriter, CompactType, CompactLimits
+from .codes import Encoding, PageHeaderField, PageType
 
 
 @fieldwise_init
@@ -39,20 +40,30 @@ def _plain_header(
 ) raises -> List[UInt8]:
     var writer = CompactWriter(CompactLimits(max_bytes=128))
     writer.begin_struct()
-    _i32(writer, 1, 0 if page_version == 1 else 3)  # DATA_PAGE / DATA_PAGE_V2
+    _i32(
+        writer,
+        1,
+        PageType.DATA_PAGE if page_version == 1 else PageType.DATA_PAGE_V2,
+    )
     _i32(writer, 2, body_size)
     _i32(writer, 3, body_size if compressed_size < 0 else compressed_size)
-    writer.write_field(5 if page_version == 1 else 8, CompactType.STRUCT)
+    writer.write_field(
+        PageHeaderField.DATA_PAGE if page_version
+        == 1 else PageHeaderField.DATA_PAGE_V2,
+        CompactType.STRUCT,
+    )
     writer.begin_struct()
     _i32(writer, 1, rows)
     if page_version == 1:
-        _i32(writer, 2, 0)  # PLAIN
-        _i32(writer, 3, 3)  # RLE definition levels
-        _i32(writer, 4, 3)  # RLE repetition levels (absent for flat fields)
+        _i32(writer, 2, Encoding.PLAIN)
+        _i32(writer, 3, Encoding.RLE)  # Definition levels
+        _i32(
+            writer, 4, Encoding.RLE
+        )  # Repetition levels (absent for flat fields)
     else:
         _i32(writer, 2, nulls)
         _i32(writer, 3, rows if num_rows < 0 else num_rows)
-        _i32(writer, 4, 0)  # PLAIN
+        _i32(writer, 4, Encoding.PLAIN)
         _i32(writer, 5, definition_bytes)
         _i32(writer, 6, repetition_bytes)
         writer.write_bool_field(7, is_compressed)
@@ -158,9 +169,9 @@ def _write_chunk(
     _i32(writer, 1, physical)
     writer.write_field(2, CompactType.LIST)
     writer.write_collection(CompactType.I32, 2 if nullable else 1)
-    writer.write_i32(0)  # PLAIN
+    writer.write_i32(Encoding.PLAIN)
     if nullable:
-        writer.write_i32(3)  # RLE levels
+        writer.write_i32(Encoding.RLE)  # Levels
     writer.write_field(3, CompactType.LIST)
     writer.write_collection(CompactType.BINARY, 1)
     writer.write_string(name)
