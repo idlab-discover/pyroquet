@@ -6,7 +6,7 @@ NuMojo operations do not automatically apply the bitmap.
 """
 from .compression import validate_codec
 from std.memory import bitcast, unsafe_memcpy
-from std.sys.info import is_little_endian
+from std.sys.info import Endian
 from std.io.file import FileHandle
 from std.sys import size_of
 from numojo.core.ndarray import NDArray
@@ -124,7 +124,7 @@ def _decode_plain_values[
         or (len(bytes) - start) % width != 0
     ):
         raise Error("PLAIN byte length disagrees with value count")
-    comptime if size_of[Scalar[dtype]]() >= 4 and is_little_endian():
+    comptime if size_of[Scalar[dtype]]() >= 4 and Endian.native() == .little:
         if count != 0:
             unsafe_memcpy(
                 dest=destination.unsafe_bitcast[UInt8](),

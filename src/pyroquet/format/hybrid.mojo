@@ -1,5 +1,5 @@
 """Bounded Parquet RLE/bit-packed integers, excluding any framing prefix."""
-from std.sys.info import is_little_endian
+from std.sys.info import Endian
 
 
 struct _HybridDecoder(Movable):
@@ -107,7 +107,7 @@ struct _HybridDecoder(Movable):
         var value = self._buffer
         if self._bits < self._width:
             var low = self._bits
-            if is_little_endian() and self._pos - self._byte_pos >= 8:
+            if Endian.native() == .little and self._pos - self._byte_pos >= 8:
                 self._buffer = (
                     data.unsafe_ptr()
                     .unsafe_offset(self._byte_pos)
@@ -203,7 +203,11 @@ struct _HybridDecoder(Movable):
         if self._packed:
             count = min(count, min(len(destination), 64))
             var written = 0
-            if is_little_endian() and count >= 8 and self._run_left % 8 == 0:
+            if (
+                Endian.native() == .little
+                and count >= 8
+                and self._run_left % 8 == 0
+            ):
                 comptime for width in range(14, 19):
                     if self._width == width:
                         written = self._packed_groups[width](
