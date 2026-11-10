@@ -1,6 +1,6 @@
 # Building and distribution
 
-Pyroquet 0.1.1 is distributed as source on
+Pyroquet 0.2.0 is distributed as source on
 [GitHub](https://github.com/idlab-discover/pyroquet). The release includes GitHub's
 source archives. No PyPI or Conda channel package is published by this project.
 
@@ -26,7 +26,7 @@ Python oracle tools remain separate from library execution.
 
 To test the local artifact, add the absolute `file:///.../build/conda` channel
 before the Modular, conda-forge and modular-community channels in a fresh Pixi
-project, then add `pyroquet ==0.1.1`. Set the following in the consumer manifest
+project, then add `pyroquet ==0.2.0`. Set the following in the consumer manifest
 so the native codec loader finds the environment's libraries:
 
 ```toml
